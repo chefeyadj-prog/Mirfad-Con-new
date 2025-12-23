@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Printer, FileSpreadsheet, Calendar, Building, Calculator, Paperclip, FileText, Edit, CreditCard, X, Lock, Ban } from 'lucide-react';
+import { ArrowRight, Printer, FileSpreadsheet, Calendar, Building, Calculator, Paperclip, FileText, Edit, CreditCard, X, Lock, Ban, Tag } from 'lucide-react';
 import { Purchase } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { round } from '../utils/mathUtils';
@@ -42,21 +42,13 @@ const PurchaseDetails: React.FC = () => {
 
   const currency = purchase.currency || 'SAR';
   const items = purchase.items || [];
-  
+  const discountAmount = purchase.discountAmount || 0;
   const isTaxExempt = purchase.isTaxExempt === true;
   
   // Calculations
-  let subTotal = 0;
-  let totalTax = 0;
-  
-  if (items.length > 0) {
-      subTotal = round(items.reduce((sum, item) => sum + round(item.quantity * item.unitPrice), 0));
-  } else {
-      // Fallback if no items (legacy data)
-      subTotal = isTaxExempt ? purchase.amount : round(purchase.amount / 1.15);
-  }
-
-  totalTax = isTaxExempt ? 0 : round(purchase.amount - subTotal);
+  const itemsSubTotal = round(items.reduce((sum, item) => sum + round(item.quantity * item.unitPrice), 0));
+  const taxableAmount = round(Math.max(0, itemsSubTotal - discountAmount));
+  const totalTax = isTaxExempt ? 0 : round(taxableAmount * 0.15);
   const grandTotal = purchase.amount;
   
   const formatMoney = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -114,32 +106,61 @@ const PurchaseDetails: React.FC = () => {
                 <th className="py-4 px-6 text-slate-500 font-medium text-sm">اسم الصنف</th>
                 <th className="py-4 px-6 text-slate-500 font-medium text-sm">الكمية</th>
                 <th className="py-4 px-6 text-slate-500 font-medium text-sm">السعر</th>
-                {!isTaxExempt && <th className="py-4 px-6 text-slate-500 font-medium text-sm">الضريبة</th>}
+                {!isTaxExempt && <th className="py-4 px-6 text-slate-500 font-medium text-sm">الإجمالي الفرعي</th>}
                 <th className="py-4 px-6 text-slate-500 font-medium text-sm">الإجمالي</th>
             </tr>
             </thead>
         <tbody className="divide-y divide-slate-100">
             {items.map((item, index) => { 
                 const amount = round(item.quantity * item.unitPrice); 
-                const tax = isTaxExempt ? 0 : round(amount * 0.15); 
                 return (
                 <tr key={index}>
                     <td className="py-4 px-6 text-slate-500 font-mono text-xs">{item.code || '-'}</td>
                     <td className="py-4 px-6 font-medium text-slate-700">{item.description}</td>
                     <td className="py-4 px-6 text-slate-600">{item.quantity}</td>
                     <td className="py-4 px-6 text-slate-600">{item.unitPrice.toFixed(2)}</td>
-                    {!isTaxExempt && <td className="py-4 px-6 text-slate-400">{tax.toFixed(2)}</td>}
-                    <td className="py-4 px-6 font-bold text-slate-800">{round(amount + tax).toFixed(2)}</td>
+                    <td className="py-4 px-6 font-bold text-slate-800" colSpan={isTaxExempt ? 2 : 2}>{amount.toFixed(2)}</td>
                 </tr>
                 ) 
             })}
-        </tbody></table>
+        </tbody>
+        <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+            <tr>
+                <td colSpan={5} className="py-3 px-6 text-left text-slate-500 font-bold border-l border-slate-100">المجموع الفرعي (Subtotal)</td>
+                <td className="py-3 px-6 font-bold text-slate-700">{formatMoney(itemsSubTotal)}</td>
+            </tr>
+            {discountAmount > 0 && (
+                <tr className="text-red-600 bg-red-50/10">
+                    <td colSpan={5} className="py-2 px-6 text-left font-bold border-l border-slate-100">
+                        الخصم (Discount)
+                    </td>
+                    <td className="py-2 px-6 font-bold">-{formatMoney(discountAmount)}</td>
+                </tr>
+            )}
+            {!isTaxExempt && (
+                <>
+                  <tr className="bg-indigo-50/10">
+                      <td colSpan={5} className="py-2 px-6 text-left font-bold text-slate-600 border-l border-slate-100">المبلغ الخاضع للضريبة (Net Taxable)</td>
+                      <td className="py-2 px-6 font-bold text-indigo-700">{formatMoney(taxableAmount)}</td>
+                  </tr>
+                  <tr>
+                      <td colSpan={5} className="py-2 px-6 text-left text-slate-500 font-bold border-l border-slate-100">ضريبة القيمة المضافة (15%)</td>
+                      <td className="py-2 px-6 font-bold text-slate-600">{formatMoney(totalTax)}</td>
+                  </tr>
+                </>
+            )}
+            <tr className="bg-indigo-600 text-white">
+                <td colSpan={5} className="py-4 px-6 text-left font-bold text-lg border-l border-indigo-700">الإجمالي النهائي المستحق (Grand Total)</td>
+                <td className="py-4 px-6 font-black text-2xl">{formatMoney(grandTotal)} <span className="text-sm font-normal">{currency}</span></td>
+            </tr>
+        </tfoot>
+        </table>
       </div>
 
       {/* Auth Modal for Editing */}
       {isAuthModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                       <h3 className="font-bold text-slate-800 flex items-center gap-2">
                         <Lock size={18} className="text-slate-500" />
