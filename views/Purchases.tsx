@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Truck, Eye, Trash2, AlertTriangle, CreditCard, Banknote, Clock, Edit, X, Lock } from 'lucide-react';
+import { Plus, Search, Truck, Eye, Trash2, AlertTriangle, CreditCard, Banknote, Clock, Edit, X, Lock, FileSpreadsheet } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Purchase, Supplier, Product } from '../types';
 import DateFilter, { DateRange, getThisMonthRange } from '../components/DateFilter';
@@ -9,6 +9,7 @@ import { supabase } from '../services/supabaseClient';
 import { logAction } from '../services/auditLogService';
 import { useAuth } from '../context/AuthContext';
 import { round } from '../utils/mathUtils';
+import * as XLSX from 'xlsx';
 
 // Helper for formatting currency
 const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -97,45 +98,6 @@ const Purchases: React.FC = () => {
     return '⇅';
   };
 
-  const initiateEdit = (id: string) => {
-    setPendingEditId(id);
-    setAuthPassword('');
-    setAuthError('');
-    setIsAuthModalOpen(true);
-  };
-
-  const verifyAndEdit = () => {
-    if (authPassword === '1234') {
-      setIsAuthModalOpen(false);
-      navigate(`/purchases/edit/${pendingEditId}`);
-    } else {
-      setAuthError('كلمة المرور غير صحيحة');
-    }
-  };
-
-  const initiateDelete = (id: string) => {
-    setPurchaseToDelete(id);
-    setDeletePassword('');
-    setDeleteError('');
-    setIsDeleteModalOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (deletePassword === '1234') {
-      if (purchaseToDelete) {
-        const p = purchases.find(p => p.id === purchaseToDelete);
-        if (p) {
-          await logAction(user, 'delete', 'المشتريات', `حذف فاتورة مشتريات #${p.invoiceNumber || p.id}`);
-        }
-        await supabase.from('purchases').delete().eq('id', purchaseToDelete);
-      }
-      setIsDeleteModalOpen(false);
-      setPurchaseToDelete(null);
-    } else {
-      setDeleteError('كلمة المرور غير صحيحة');
-    }
-  };
-
   const filteredPurchases = useMemo(() => {
     let result = purchases.filter(p => {
       const searchLower = searchTerm.toLowerCase();
@@ -172,7 +134,6 @@ const Purchases: React.FC = () => {
     return result;
   }, [purchases, searchTerm, dateRange, suppliers, sortKey, sortDirection]);
 
-  // Calculate Totals based on filtered data
   const totals = useMemo(() => {
     return filteredPurchases.reduce((acc, p) => {
       const amount = p.amount || 0;
@@ -183,6 +144,111 @@ const Purchases: React.FC = () => {
       return acc;
     }, { cash: 0, transfer: 0, credit: 0, grandTotal: 0 });
   }, [filteredPurchases]);
+
+  const exportToExcel = () => {
+    if (filteredPurchases.length === 0) {
+      alert("لا توجد بيانات لتصديرها");
+      return;
+    }
+
+    const excelData = filteredPurchases.map(p => ({
+      'رقم الطلب': p.invoiceNumber || p.id,
+      'المورد': p.partyName,
+      'التاريخ': p.date,
+      'الوصف': p.description,
+      'التكلفة': p.amount,
+      'طريقة الدفع': getPaymentMethodLabel(p.paymentMethod).label,
+      'الحالة': p.status === 'received' ? 'تم الاستلام' : 'قيد الطلب'
+    }));
+
+    excelData.push({
+      'رقم الطلب': 'الإجمالي الكلي',
+      'المورد': '',
+      'التاريخ': '',
+      'الوصف': '',
+      'التكلفة': totals.grandTotal,
+      'طريقة الدفع': '',
+      'الحالة': ''
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "المشتريات");
+
+    const wscols = [{ wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `سجل_المشتريات_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const initiateEdit = (id: string) => {
+    setPendingEditId(id);
+    setAuthPassword('');
+    setAuthError('');
+    setIsAuthModalOpen(true);
+  };
+
+  const verifyAndEdit = () => {
+    if (authPassword === '1234') {
+      setIsAuthModalOpen(false);
+      navigate(`/purchases/edit/${pendingEditId}`);
+    } else {
+      setAuthError('كلمة المرور غير صحيحة');
+    }
+  };
+
+  const initiateDelete = (id: string) => {
+    setPurchaseToDelete(id);
+    setDeletePassword('');
+    setDeleteError('');
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deletePassword === '1234') {
+      if (purchaseToDelete) {
+        const purchase = purchases.find(p => p.id === purchaseToDelete);
+        if (purchase) {
+          // 1. تحديث رصيد المورد إذا كانت الفاتورة آجلة
+          if (purchase.paymentMethod === 'credit') {
+            const supplier = suppliers.find(s => s.name === purchase.partyName);
+            if (supplier) {
+              const newBalance = round(supplier.balance - purchase.amount);
+              await supabase.from('suppliers').update({ balance: newBalance }).eq('id', supplier.id);
+            }
+          }
+
+          // 2. تحديث المخزون (خصم الكميات المضافة سابقاً)
+          if (!purchase.skipInventory && purchase.items && purchase.items.length > 0) {
+            for (const item of purchase.items) {
+              // البحث عن المنتج في المخزون الحالي
+              const product = products.find(p => 
+                (item.code && p.sku === item.code) || (p.name === item.description)
+              );
+
+              if (product) {
+                const newQty = product.quantity - item.quantity;
+                await supabase.from('products').update({ quantity: newQty }).eq('id', product.id);
+              }
+            }
+          }
+          
+          await logAction(
+            user, 
+            'delete', 
+            'المشتريات', 
+            `حذف فاتورة #${purchase.invoiceNumber || purchase.id}: تم خصم ${purchase.amount} من المورد وخصم الكميات من المخزون`
+          );
+          
+          await supabase.from('purchases').delete().eq('id', purchaseToDelete);
+        }
+      }
+      setIsDeleteModalOpen(false);
+      setPurchaseToDelete(null);
+    } else {
+      setDeleteError('كلمة المرور غير صحيحة');
+    }
+  };
 
   return (
     <div>
@@ -198,29 +264,14 @@ const Purchases: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <StatCard 
-          title="إجمالي المشتريات (كاش)" 
-          value={`${formatCurrency(totals.cash)}`} 
-          icon={Banknote} 
-          color="green" 
-        />
-        <StatCard 
-          title="إجمالي المشتريات (آجل)" 
-          value={`${formatCurrency(totals.credit)}`} 
-          icon={Clock} 
-          color="orange" 
-        />
-        <StatCard 
-          title="إجمالي المشتريات (حوالة)" 
-          value={`${formatCurrency(totals.transfer)}`} 
-          icon={CreditCard} 
-          color="blue" 
-        />
+        <StatCard title="إجمالي المشتريات (كاش)" value={`${formatCurrency(totals.cash)}`} icon={Banknote} color="green" />
+        <StatCard title="إجمالي المشتريات (آجل)" value={`${formatCurrency(totals.credit)}`} icon={Clock} color="orange" />
+        <StatCard title="إجمالي المشتريات (حوالة)" value={`${formatCurrency(totals.transfer)}`} icon={CreditCard} color="blue" />
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex gap-4">
-          <div className="relative flex-1">
+        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
             <Search className="absolute right-3 top-3 text-slate-400" size={18} />
             <input 
               type="text" 
@@ -231,34 +282,29 @@ const Purchases: React.FC = () => {
               dir="rtl"
             />
           </div>
-          <DateFilter onFilterChange={setDateRange} />
+          <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={exportToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-bold text-sm"
+              >
+                  <FileSpreadsheet size={18} />
+                  <span>تصدير Excel</span>
+              </button>
+              <DateFilter onFilterChange={setDateRange} />
+          </div>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full text-center">
             <thead className="bg-slate-50 text-slate-500 text-sm">
               <tr>
-                <th onClick={() => handleSort('invoiceNumber')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  رقم الطلب {renderSortIcon('invoiceNumber')}
-                </th>
-                <th onClick={() => handleSort('partyName')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  المورد {renderSortIcon('partyName')}
-                </th>
-                <th onClick={() => handleSort('date')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  التاريخ {renderSortIcon('date')}
-                </th>
-                <th onClick={() => handleSort('description')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  الوصف {renderSortIcon('description')}
-                </th>
-                <th onClick={() => handleSort('amount')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  التكلفة {renderSortIcon('amount')}
-                </th>
-                <th onClick={() => handleSort('paymentMethod')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  طريقة الدفع {renderSortIcon('paymentMethod')}
-                </th>
-                <th onClick={() => handleSort('status')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">
-                  الحالة {renderSortIcon('status')}
-                </th>
+                <th onClick={() => handleSort('invoiceNumber')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">رقم الطلب {renderSortIcon('invoiceNumber')}</th>
+                <th onClick={() => handleSort('partyName')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">المورد {renderSortIcon('partyName')}</th>
+                <th onClick={() => handleSort('date')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">التاريخ {renderSortIcon('date')}</th>
+                <th onClick={() => handleSort('description')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">الوصف {renderSortIcon('description')}</th>
+                <th onClick={() => handleSort('amount')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">التكلفة {renderSortIcon('amount')}</th>
+                <th onClick={() => handleSort('paymentMethod')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">طريقة الدفع {renderSortIcon('paymentMethod')}</th>
+                <th onClick={() => handleSort('status')} className="p-4 font-bold text-center cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap">الحالة {renderSortIcon('status')}</th>
                 <th className="p-4 font-bold text-center whitespace-nowrap">الإجراءات</th>
               </tr>
             </thead>
@@ -272,9 +318,7 @@ const Purchases: React.FC = () => {
                   <td className="p-4 font-medium text-slate-800 text-center">{purchase.partyName}</td>
                   <td className="p-4 text-slate-500 text-center">{purchase.date}</td>
                   <td className="p-4 text-slate-500 max-w-xs truncate text-center">{purchase.description}</td>
-                  <td className="p-4 font-bold text-slate-800 text-center font-mono">
-                    {formatCurrency(purchase.amount)} ر.س
-                  </td>
+                  <td className="p-4 font-bold text-slate-800 text-center font-mono">{formatCurrency(purchase.amount)} ر.س</td>
                   <td className="p-4 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${paymentInfo.color}`}>
                           <PaymentIcon size={12} /> {paymentInfo.label}
@@ -289,46 +333,23 @@ const Purchases: React.FC = () => {
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button 
-                        onClick={() => navigate(`/purchases/${purchase.id}`)}
-                        className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="عرض التفاصيل"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button 
-                        onClick={() => initiateEdit(purchase.id)}
-                        className="p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="تعديل الفاتورة"
-                      >
-                        <Edit size={18} />
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => initiateDelete(purchase.id)}
-                        className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="حذف الفاتورة"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <button onClick={() => navigate(`/purchases/${purchase.id}`)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="عرض التفاصيل"><Eye size={18} /></button>
+                      <button onClick={() => initiateEdit(purchase.id)} className="p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="تعديل الفاتورة"><Edit size={18} /></button>
+                      <button type="button" onClick={() => initiateDelete(purchase.id)} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف الفاتورة"><Trash2 size={18} /></button>
                     </div>
                   </td>
                 </tr>
               )})}
               {filteredPurchases.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
-                      {purchases.length === 0 ? "لا توجد مشتريات مسجلة" : "لا توجد نتائج مطابقة للبحث"}
-                  </td>
+                  <td colSpan={8} className="p-8 text-center text-slate-400">{purchases.length === 0 ? "لا توجد مشتريات مسجلة" : "لا توجد نتائج مطابقة للبحث"}</td>
                 </tr>
               )}
             </tbody>
             <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                 <tr className="font-black text-slate-800">
                     <td colSpan={4} className="p-4 text-center text-lg">إجمالي الصفحة</td>
-                    <td className="p-4 text-center font-mono text-indigo-700 text-lg bg-indigo-50/50">
-                      {formatCurrency(totals.grandTotal)} ر.س
-                    </td>
+                    <td className="p-4 text-center font-mono text-indigo-700 text-lg bg-indigo-50/50">{formatCurrency(totals.grandTotal)} ر.س</td>
                     <td colSpan={3}></td>
                 </tr>
             </tfoot>
@@ -343,7 +364,7 @@ const Purchases: React.FC = () => {
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={24} /></div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">تأكيد حذف الفاتورة</h3>
-              <p className="text-slate-500 text-sm mb-6">هل أنت متأكد من حذف هذه الفاتورة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.</p>
+              <p className="text-slate-500 text-sm mb-6">هل أنت متأكد من حذف هذه الفاتورة نهائياً؟ سيتم خصم قيمتها من رصيد المورد وتعديل كميات المخزون تلقائياً.</p>
               <div className="mb-4 text-right">
                 <label className="block text-xs font-bold text-slate-700 mb-1">كلمة المرور</label>
                 <input 
@@ -370,10 +391,7 @@ const Purchases: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Lock size={18} className="text-slate-500" />
-                تأكيد الصلاحية للتعديل
-              </h3>
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><Lock size={18} className="text-slate-500" /> تأكيد الصلاحية للتعديل</h3>
               <button onClick={() => setIsAuthModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
             <div className="p-6">
@@ -388,12 +406,7 @@ const Purchases: React.FC = () => {
                 onKeyDown={(e) => e.key === 'Enter' && verifyAndEdit()}
               />
               {authError && <p className="text-xs text-red-500 text-center mb-4">{authError}</p>}
-              <button 
-                onClick={verifyAndEdit}
-                className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
-              >
-                تحقق ومتابعة
-              </button>
+              <button onClick={verifyAndEdit} className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors">تحقق ومتابعة</button>
             </div>
           </div>
         </div>
