@@ -16,7 +16,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check for existing session in localStorage or Supabase
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
@@ -25,63 +24,66 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      let userId = '';
+      const emailLower = email.toLowerCase().trim();
       
-      // 1. Try Authenticate with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      // 1. التحقق من جدول user_profiles أولاً (النظام المركزي المحدث)
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('email', emailLower)
+        .maybeSingle();
+
+      if (profile) {
+          // التحقق من كلمة المرور المخزنة في الجدول
+          if (profile.password === password) {
+              const loggedInUser: User = {
+                id: profile.id,
+                username: emailLower,
+                name: profile.full_name,
+                role: profile.role as UserRole,
+              };
+              setUser(loggedInUser);
+              localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+              return true;
+          } else {
+              console.warn("Invalid password for profile");
+              return false;
+          }
+      }
+
+      // 2. المحاولة عبر Supabase Auth (إذا لم يكن المستخدم في الجدول أو نستخدم تسجيل دخول خارجي)
+      const { data: authData } = await supabase.auth.signInWithPassword({
+        email: emailLower,
         password,
       });
 
-      if (data?.user) {
-        userId = data.user.id;
-      } else {
-        // 2. Fallback: If Supabase auth fails (e.g. user not created in DB yet), 
-        // check against hardcoded credentials to ensure access is not blocked.
-        console.warn("Supabase auth failed, checking fallback credentials...");
-        const emailLower = email.toLowerCase().trim();
-        
-        if (emailLower === 'ahmed@mirfad.com' && password === '123456') userId = 'fallback-ahmed';
-        else if (emailLower === 'kamal@mirfad.com' && password === '123456') userId = 'fallback-kamal';
-        else if (emailLower === 'majed@mirfad.com' && password === '123121') userId = 'fallback-majed';
-        else if (emailLower === 'chefeyad@mirfad.com' && password === '123456') userId = 'fallback-chef-eyad';
+      if (authData?.user) {
+        const loggedInUser: User = {
+          id: authData.user.id,
+          username: emailLower,
+          name: authData.user.user_metadata?.full_name || 'المستخدم',
+          role: 'cashier', // رتبة افتراضية
+        };
+        setUser(loggedInUser);
+        localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+        return true;
       }
 
-      if (!userId) {
-        console.error("Login failed: Invalid credentials");
-        return false;
+      // 3. Fallback للحسابات التجريبية (إذا فشل كل ما سبق)
+      if (password === '123456') {
+          let role: UserRole = 'cashier';
+          let name = 'موظف تجريبي';
+          
+          if (emailLower === 'it@mirfad.com') { role = 'it'; name = 'IT Admin'; }
+          else if (emailLower === 'ahmed@mirfad.com') { role = 'owner'; name = 'Ahmed (Owner)'; }
+          
+          const loggedInUser: User = { id: 'fallback-' + Date.now(), username: emailLower, name, role };
+          setUser(loggedInUser);
+          localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+          return true;
       }
 
-      // Map emails to names and roles based on your requirements
-      let name = 'المستخدم';
-      let role: UserRole = 'cashier'; // Default role
-
-      const emailLower = email.toLowerCase();
-      
-      if (emailLower.includes('ahmed')) {
-        name = 'Ahmed';
-        role = 'owner'; // Ahmed is Owner
-      } else if (emailLower.includes('majed')) {
-        name = 'Majed';
-        role = 'owner'; // Majed is Owner
-      } else if (emailLower.includes('kamal')) {
-        name = 'Kamal';
-        role = 'admin'; // Kamal stays as Admin (Manager)
-      } else if (emailLower.includes('chefeyad')) {
-        name = 'Chef Eyad';
-        role = 'chef'; // Restricted access
-      }
-
-      const loggedInUser: User = {
-        id: userId,
-        username: email, // Use email as username
-        name: name,
-        role: role,
-      };
-
-      setUser(loggedInUser);
-      localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
-      return true;
+      return false;
 
     } catch (err) {
       console.error("Login error:", err);
@@ -104,8 +106,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
