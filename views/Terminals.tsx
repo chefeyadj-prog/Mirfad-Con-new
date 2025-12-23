@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Server, ArrowRight, CreditCard, Calendar, TrendingUp, Plus, Trash2, X, Save, Lock, AlertTriangle, Loader2 } from 'lucide-react';
+import { Server, ArrowRight, CreditCard, Calendar, TrendingUp, Plus, Trash2, X, Save, Lock, AlertTriangle, Loader2, FileSpreadsheet } from 'lucide-react';
 import DateFilter, { DateRange } from '../components/DateFilter';
 import { supabase } from '../services/supabaseClient';
 import { DailyClosing } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { logAction } from '../services/auditLogService';
+import * as XLSX from 'xlsx';
 
 const DEFAULT_TERMINAL_IDS = [
   '63427603', '63427604', '63427605', '64873724', '64873994', '64102585'
@@ -111,6 +112,46 @@ const Terminals: React.FC = () => {
 
   const grandTotal = terminalAggregates.reduce((sum, t) => sum + t.total, 0);
 
+  const exportToExcel = () => {
+    const excelData = terminalAggregates.map(t => ({
+      'رقم الجهاز': t.id,
+      'مدى': t.mada,
+      'فيزا': t.visa,
+      'ماستر كارد': t.master,
+      'أمريكان': t.amex,
+      'بطاقات الخليج': t.gcci,
+      'الإجمالي': t.total
+    }));
+
+    // Add totals row
+    excelData.push({
+      'رقم الجهاز': 'الإجمالي الكلي',
+      'مدى': terminalAggregates.reduce((s, t) => s + t.mada, 0),
+      'فيزا': terminalAggregates.reduce((s, t) => s + t.visa, 0),
+      'ماستر كارد': terminalAggregates.reduce((s, t) => s + t.master, 0),
+      'أمريكان': terminalAggregates.reduce((s, t) => s + t.amex, 0),
+      'بطاقات الخليج': terminalAggregates.reduce((s, t) => s + t.gcci, 0),
+      'الإجمالي': grandTotal
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "مبيعات الأجهزة");
+
+    const wscols = [
+      { wch: 15 }, // رقم الجهاز
+      { wch: 12 }, // مدى
+      { wch: 12 }, // فيزا
+      { wch: 12 }, // ماستر
+      { wch: 12 }, // أمريكان
+      { wch: 12 }, // خليج
+      { wch: 15 }, // الإجمالي
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `مبيعات_أجهزة_الشبكة_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const getTerminalHistory = (termId: string) => {
       return filteredClosings.map(closing => {
           const details = closing.details?.terminalDetails?.[termId];
@@ -123,7 +164,7 @@ const Terminals: React.FC = () => {
 
   const renderSummaryView = () => (
     <>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
              <Server className="text-indigo-600" size={28} />
@@ -131,15 +172,22 @@ const Terminals: React.FC = () => {
            </h2>
            <p className="text-slate-500 text-sm mt-1">إدارة الأجهزة والتقارير المجمعة</p>
         </div>
-        <div className="flex items-center gap-3">
-             <div className="bg-indigo-50 border border-indigo-100 text-indigo-800 px-4 py-2 rounded-lg flex items-center gap-2 hidden md:flex">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+             <div className="bg-indigo-50 border border-indigo-100 text-indigo-800 px-4 py-2 rounded-lg flex items-center gap-2 hidden lg:flex">
                 <span className="text-sm">الإجمالي:</span>
                 <span className="font-bold font-mono">{grandTotal.toLocaleString()} ر.س</span>
              </div>
+             <button 
+                onClick={exportToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-bold text-sm"
+             >
+                  <FileSpreadsheet size={18} />
+                  <span>تصدير Excel</span>
+             </button>
              <DateFilter onFilterChange={setDateRange} />
              <button 
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-md transition-all"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-md transition-all font-bold text-sm"
              >
                 <Plus size={18} />
                 <span>إضافة جهاز</span>
