@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowRight, Plus, Trash2, Save, Paperclip, CheckCircle, Loader2, Info, Search, ChevronDown, UserPlus, AlertTriangle, AlertCircle, FileSpreadsheet, Download, Layers, X, FileImage } from 'lucide-react';
+import { ArrowRight, Plus, Trash2, Save, Paperclip, CheckCircle, Loader2, Info, Search, ChevronDown, UserPlus, AlertTriangle, AlertCircle, FileSpreadsheet, Download, Layers, X, FileImage, Tag } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { analyzeInvoiceImage, ImageDataInput } from '../services/geminiService';
 import { Supplier, Purchase, InvoiceItem, Product } from '../types';
@@ -9,8 +9,6 @@ import { logAction } from '../services/auditLogService';
 import { useAuth } from '../context/AuthContext';
 import { round, calculateTax } from '../utils/mathUtils';
 import * as XLSX from 'xlsx';
-
-// Removed the redundant local declaration of XLSX to resolve the conflict with the import above.
 
 const CreatePurchase: React.FC = () => {
   const navigate = useNavigate();
@@ -48,21 +46,17 @@ const CreatePurchase: React.FC = () => {
   const [currency, setCurrency] = useState('SAR');
   const [taxNumber, setTaxNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit' | 'transfer'>('credit');
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
   
-  // Multiple Files State
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisSuccessMsg, setAnalysisSuccessMsg] = useState('');
   const [analysisErrorMsg, setAnalysisErrorMsg] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-  
-  // New State for Skipping Inventory
   const [skipInventory, setSkipInventory] = useState(false);
 
   const [items, setItems] = useState<InvoiceItem[]>([{ id: '1', code: '', description: '', quantity: 1, unitPrice: 0 }]);
 
-  // Load existing data if editing
   useEffect(() => {
     if (id && purchases.length > 0) {
       const purchaseToEdit = purchases.find((p) => p.id === id);
@@ -74,13 +68,13 @@ const CreatePurchase: React.FC = () => {
         setCurrency(purchaseToEdit.currency || 'SAR');
         setTaxNumber(purchaseToEdit.taxNumber || '');
         setPaymentMethod(purchaseToEdit.paymentMethod || 'credit');
+        setDiscountAmount(purchaseToEdit.discountAmount || 0);
         if (purchaseToEdit.items && purchaseToEdit.items.length > 0) setItems(purchaseToEdit.items);
         setSkipInventory(purchaseToEdit.skipInventory || false);
       }
     }
   }, [id, purchases, suppliers]);
 
-  // Sync Supplier Search Term
   useEffect(() => {
     const selected = suppliers.find(s => s.id === supplierId);
     if (selected) {
@@ -89,7 +83,6 @@ const CreatePurchase: React.FC = () => {
     }
   }, [supplierId, suppliers]);
 
-  // Check for duplicate Invoice Number
   useEffect(() => {
     if (invoiceNumber && supplierId) {
         const currentSupplier = suppliers.find(s => s.id === supplierId);
@@ -146,9 +139,9 @@ const CreatePurchase: React.FC = () => {
     if (files && files.length > 0) {
       const newFiles = Array.from(files);
       setAttachedFiles(prev => [...prev, ...newFiles]);
-      analyzeFiles([...attachedFiles, ...newFiles]); // Analyze all files including newly added
+      analyzeFiles([...attachedFiles, ...newFiles]); 
     }
-    if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input to allow adding same file again
+    if (fileInputRef.current) fileInputRef.current.value = ''; 
   };
 
   const removeAttachedFile = (index: number) => {
@@ -162,7 +155,6 @@ const CreatePurchase: React.FC = () => {
       setAnalysisErrorMsg('');
       
       try {
-        // Convert all files to base64
         const imagesData: ImageDataInput[] = await Promise.all(
             filesToAnalyze.map(async (file) => ({
                 base64: await fileToBase64(file),
@@ -246,10 +238,12 @@ const CreatePurchase: React.FC = () => {
   };
 
   const calculateRowTotal = (item: InvoiceItem) => round(item.quantity * item.unitPrice);
+  
   const subTotal = round(items.reduce((sum, item) => sum + round(item.quantity * item.unitPrice), 0));
+  const taxableAmount = round(Math.max(0, subTotal - discountAmount)); 
   const vatRate = 0.15;
-  const vatTotal = round(subTotal * vatRate);
-  const grandTotal = round(subTotal + vatTotal);
+  const vatTotal = round(taxableAmount * vatRate);
+  const grandTotal = round(taxableAmount + vatTotal);
 
   const handleSave = async () => {
     if (!invoiceNumber || !supplierId || items.length === 0) {
@@ -265,6 +259,7 @@ const CreatePurchase: React.FC = () => {
       partyName: selectedSupplier?.name || '',
       description: `فاتورة مشتريات #${invoiceNumber}`,
       amount: grandTotal,
+      discountAmount,
       taxNumber,
       currency,
       paymentMethod,
@@ -319,7 +314,7 @@ const CreatePurchase: React.FC = () => {
            }
            
            if (paymentMethod === 'credit' && selectedSupplier) {
-               const newBalance = selectedSupplier.balance + grandTotal;
+               const newBalance = round(selectedSupplier.balance + grandTotal);
                await supabase.from('suppliers').update({ balance: newBalance }).eq('id', selectedSupplier.id);
            }
 
@@ -338,7 +333,7 @@ const CreatePurchase: React.FC = () => {
     <div className="max-w-5xl mx-auto pb-12">
         <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/purchases')} className="p-2 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-50">
+                <button onClick={() => navigate('/purchases')} className="p-2 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-50 transition-colors shadow-sm">
                     <ArrowRight size={20} />
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800">{id ? 'تعديل فاتورة مشتريات' : 'إضافة فاتورة مشتريات جديدة'}</h2>
@@ -415,7 +410,7 @@ const CreatePurchase: React.FC = () => {
                         <input type="checkbox" className="hidden" checked={skipInventory} onChange={() => setSkipInventory(!skipInventory)} />
                         <span className="text-sm font-medium">عدم إضافة الأصناف للمخزون</span>
                      </label>
-                     <p className="text-xs text-slate-400 mt-1 mr-7">عند التفعيل، لن يتم زيادة كميات المنتجات في المخزون (للمصاريف أو الأصول).</p>
+                     <p className="text-xs text-slate-400 mt-1 mr-7">عند التفعيل، لن يتم زيادة كميات المنتجات في المخزون.</p>
                 </div>
             </div>
         </div>
@@ -457,7 +452,7 @@ const CreatePurchase: React.FC = () => {
                                 </div>
                             )) : (
                                 <div className="p-3 text-center text-slate-500 text-sm">
-                                    لا يوجد نتائج. <button className="text-indigo-600 font-bold hover:underline">إضافة مورد جديد</button>
+                                    لا يوجد نتائج.
                                 </div>
                             )}
                         </div>
@@ -582,18 +577,32 @@ const CreatePurchase: React.FC = () => {
                         </tr>
                     ))}
                 </tbody>
-                <tfoot className="bg-slate-50">
+                <tfoot className="bg-slate-50 border-t-2 border-slate-100">
                     <tr>
-                        <td colSpan={5} className="p-4 text-left font-bold text-slate-600">المجموع الفرعي (Subtotal)</td>
+                        <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">المجموع الفرعي (Subtotal)</td>
                         <td colSpan={2} className="p-4 font-bold text-slate-800 text-lg">{subTotal.toFixed(2)}</td>
                     </tr>
                     <tr>
-                        <td colSpan={5} className="p-4 text-left font-bold text-slate-600">ضريبة القيمة المضافة (15%)</td>
+                        <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
+                             الخصم (Discount)
+                        </td>
+                        <td colSpan={2} className="p-4">
+                             <input 
+                                type="number" 
+                                className="w-32 p-1 border border-slate-300 rounded bg-white text-slate-800 font-bold outline-none focus:ring-2 focus:ring-indigo-500 text-center font-mono" 
+                                value={discountAmount === 0 ? '' : discountAmount} 
+                                onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value)))}
+                                placeholder="0.00"
+                             />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">ضريبة القيمة المضافة (15%)</td>
                         <td colSpan={2} className="p-4 font-bold text-slate-600">{vatTotal.toFixed(2)}</td>
                     </tr>
                     <tr className="bg-indigo-50">
-                        <td colSpan={5} className="p-4 text-left font-bold text-indigo-900">الإجمالي النهائي (Grand Total)</td>
-                        <td colSpan={2} className="p-4 font-bold text-indigo-700 text-xl">{grandTotal.toFixed(2)} <span className="text-sm font-normal">{currency}</span></td>
+                        <td colSpan={5} className="p-4 text-left font-bold text-indigo-900 border-l border-indigo-100">الإجمالي النهائي (Grand Total)</td>
+                        <td colSpan={2} className="p-4 font-bold text-indigo-700 text-xl font-mono">{grandTotal.toFixed(2)} <span className="text-sm font-normal">{currency}</span></td>
                     </tr>
                 </tfoot>
              </table>
