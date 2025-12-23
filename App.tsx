@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
-import { Bell, AlertTriangle } from 'lucide-react';
+import { Bell, AlertTriangle, Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './views/Dashboard';
 import Sales from './views/Sales';
@@ -19,16 +19,17 @@ import Reports from './views/Reports';
 import Backups from './views/Backups';
 import GeneralExpenses from './views/GeneralExpenses';
 import Login from './views/Login';
-import MonthlyPurchasesReport from './views/MonthlyPurchasesReport';
 import AuditLogs from './views/AuditLogs';
 import Retroactive from './views/Retroactive';
 import PermissionsManagement from './views/PermissionsManagement';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
+import { usePermissions } from './context/PermissionsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { supabase } from './services/supabaseClient';
 
 const AppLayout = () => {
   const { user } = useAuth();
+  const { isLoading: permsLoading } = usePermissions();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [lowStockItems, setLowStockItems] = useState<{id: string, name: string, quantity: number}[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -55,13 +56,22 @@ const AppLayout = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
   }, []);
+
+  if (permsLoading) {
+      return (
+          <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
+              <Loader2 className="animate-spin text-indigo-600" size={48} />
+              <p className="text-slate-500 font-bold">جاري تحميل إعدادات الحوكمة...</p>
+          </div>
+      );
+  }
   
   return (
     <div className="flex flex-row min-h-screen bg-slate-50 text-slate-800">
       <Sidebar />
       <main className="flex-1 overflow-auto h-screen">
         <header className="bg-white shadow-sm sticky top-0 z-10 px-8 py-4 flex justify-between items-center print:hidden">
-          <h1 className="text-xl font-bold text-slate-700">نظام إدارة الموارد</h1>
+          <h1 className="text-xl font-bold text-slate-700">نظام مِرفاد للموارد</h1>
           
           <div className="flex items-center gap-6">
             <div className="relative" ref={notifRef}>
@@ -79,7 +89,7 @@ const AppLayout = () => {
                 </button>
 
                 {notificationsOpen && (
-                    <div className="absolute left-0 mt-3 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in origin-top-left">
+                    <div className="absolute left-0 mt-3 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in origin-top-left text-right" dir="rtl">
                         <div className="p-4 border-b border-slate-50 bg-slate-50 flex justify-between items-center">
                             <h4 className="font-bold text-slate-700 text-sm">التنبيهات</h4>
                             {lowStockItems.length > 0 && (
@@ -94,7 +104,7 @@ const AppLayout = () => {
                                             key={item.id} 
                                             to="/inventory" 
                                             onClick={() => setNotificationsOpen(false)}
-                                            className="p-4 hover:bg-slate-50 flex items-start gap-3 transition-colors block text-right"
+                                            className="p-4 hover:bg-slate-50 flex items-start gap-3 transition-colors block"
                                         >
                                             <div className="p-2 bg-red-50 text-red-500 rounded-lg shrink-0">
                                                 <AlertTriangle size={16} />
@@ -119,9 +129,9 @@ const AppLayout = () => {
             <div className="flex items-center gap-4 border-r border-slate-100 pr-6">
                 <div className="text-right">
                 <span className="block text-sm font-bold text-slate-700">{user?.name}</span>
-                <span className="block text-xs text-slate-500 uppercase font-bold">{user?.role}</span>
+                <span className="block text-[10px] text-slate-400 uppercase font-black">{user?.role}</span>
                 </div>
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold border-2 border-white shadow-sm">
                 {user?.name.charAt(0)}
                 </div>
             </div>
@@ -137,52 +147,37 @@ const AppLayout = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route element={<ProtectedRoute />}>
-             <Route element={<AppLayout />}>
-                <Route path="/" element={<Dashboard />} />
-                
-                <Route element={<ProtectedRoute allowedRoles={['it', 'owner', 'admin', 'cashier']} />}>
-                   <Route path="/sales" element={<Sales />} />
-                   <Route path="/sales/:id" element={<DailyClosingDetails />} />
-                   <Route path="/custody" element={<Custody />} />
-                </Route>
-
-                <Route element={<ProtectedRoute allowedRoles={['it', 'owner', 'admin', 'accountant']} />}>
-                   <Route path="/terminals" element={<Terminals />} />
-                   <Route path="/purchases" element={<Purchases />} />
-                   <Route path="/purchases/new" element={<CreatePurchase />} />
-                   <Route path="/purchases/edit/:id" element={<CreatePurchase />} />
-                   <Route path="/purchases/:id" element={<PurchaseDetails />} />
-                   <Route path="/suppliers" element={<Suppliers />} />
-                   <Route path="/suppliers/:id" element={<SupplierStatement />} />
-                   <Route path="/salaries" element={<Salaries />} />
-                   <Route path="/general-expenses" element={<GeneralExpenses />} />
-                   <Route path="/retroactive" element={<Retroactive />} />
-                </Route>
-
-                <Route element={<ProtectedRoute allowedRoles={['it', 'owner']} />}>
-                   <Route path="/reports" element={<Reports />} />
-                   <Route path="/backups" element={<Backups />} />
-                   <Route path="/audit-logs" element={<AuditLogs />} />
-                </Route>
-
-                {/* EXCLUSIVE IT ROUTE */}
-                <Route element={<ProtectedRoute allowedRoles={['it']} />}>
-                   <Route path="/permissions" element={<PermissionsManagement />} />
-                </Route>
-
-                <Route path="/inventory" element={<Inventory />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-             </Route>
-          </Route>
-        </Routes>
-      </HashRouter>
-    </AuthProvider>
+    <HashRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        
+        <Route element={<ProtectedRoute />}>
+           <Route element={<AppLayout />}>
+              <Route path="/" element={<ProtectedRoute permissionKey="dashboard"><Dashboard /></ProtectedRoute>} />
+              <Route path="/sales" element={<ProtectedRoute permissionKey="sales"><Sales /></ProtectedRoute>} />
+              <Route path="/sales/:id" element={<ProtectedRoute permissionKey="sales"><DailyClosingDetails /></ProtectedRoute>} />
+              <Route path="/terminals" element={<ProtectedRoute permissionKey="terminals"><Terminals /></ProtectedRoute>} />
+              <Route path="/purchases" element={<ProtectedRoute permissionKey="purchases"><Purchases /></ProtectedRoute>} />
+              <Route path="/purchases/new" element={<ProtectedRoute permissionKey="purchases"><CreatePurchase /></ProtectedRoute>} />
+              <Route path="/purchases/edit/:id" element={<ProtectedRoute permissionKey="purchases"><CreatePurchase /></ProtectedRoute>} />
+              <Route path="/purchases/:id" element={<ProtectedRoute permissionKey="purchases"><PurchaseDetails /></ProtectedRoute>} />
+              <Route path="/inventory" element={<ProtectedRoute permissionKey="inventory"><Inventory /></ProtectedRoute>} />
+              <Route path="/custody" element={<ProtectedRoute permissionKey="custody"><Custody /></ProtectedRoute>} />
+              <Route path="/general-expenses" element={<ProtectedRoute permissionKey="general_expenses"><GeneralExpenses /></ProtectedRoute>} />
+              <Route path="/suppliers" element={<ProtectedRoute permissionKey="suppliers"><Suppliers /></ProtectedRoute>} />
+              <Route path="/suppliers/:id" element={<ProtectedRoute permissionKey="suppliers"><SupplierStatement /></ProtectedRoute>} />
+              <Route path="/salaries" element={<ProtectedRoute permissionKey="salaries"><Salaries /></ProtectedRoute>} />
+              <Route path="/retroactive" element={<ProtectedRoute permissionKey="retroactive"><Retroactive /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute permissionKey="reports"><Reports /></ProtectedRoute>} />
+              <Route path="/backups" element={<ProtectedRoute permissionKey="backups"><Backups /></ProtectedRoute>} />
+              <Route path="/audit-logs" element={<ProtectedRoute permissionKey="audit_logs"><AuditLogs /></ProtectedRoute>} />
+              <Route path="/permissions" element={<ProtectedRoute permissionKey="permissions"><PermissionsManagement /></ProtectedRoute>} />
+              
+              <Route path="*" element={<Navigate to="/" replace />} />
+           </Route>
+        </Route>
+      </Routes>
+    </HashRouter>
   );
 };
 
