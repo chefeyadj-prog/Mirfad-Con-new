@@ -1,6 +1,7 @@
 
 import { supabase } from './supabaseClient';
 import { User } from '../types';
+import { createSystemBackup } from './backupService';
 
 export const logAction = async (
   user: User | null,
@@ -8,10 +9,7 @@ export const logAction = async (
   resource: string,
   details: string
 ) => {
-  if (!user) {
-      console.warn("Attempted to log action without user context");
-      return;
-  }
+  if (!user) return;
 
   const logEntry = {
     user_id: user.id,
@@ -25,10 +23,15 @@ export const logAction = async (
 
   try {
     const { error } = await supabase.from('audit_logs').insert(logEntry);
-    if (error) {
-        console.error('Failed to write audit log:', error.message);
+    
+    // تشغيل النسخ الاحتياطي التلقائي فوراً بعد أي تعديل أو حذف أو إضافة
+    if (action !== 'login' && !error) {
+       // يتم استدعاؤه بشكل غير متزامن لضمان سرعة واجهة المستخدم
+       createSystemBackup(user, `نسخة تلقائية (بعد ${action} في ${resource})`);
     }
+
+    if (error) console.error('AuditLog Error:', error.message);
   } catch (err) {
-    console.error('Error logging action:', err);
+    console.error('AuditLog Catch Error:', err);
   }
 };
