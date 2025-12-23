@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Trash2, Calendar, PieChart, Banknote, X, Save, AlertCircle, Loader2, Filter, AlertTriangle, Edit, Lock, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Trash2, Calendar, PieChart, Banknote, X, Save, AlertCircle, Loader2, Filter, AlertTriangle, Edit, Lock, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import { GeneralExpense } from '../types';
 import DateFilter, { DateRange, getThisMonthRange } from '../components/DateFilter';
 import { supabase } from '../services/supabaseClient';
@@ -8,6 +8,7 @@ import StatCard from '../components/StatCard';
 import { logAction } from '../services/auditLogService';
 import { useAuth } from '../context/AuthContext';
 import { round } from '../utils/mathUtils';
+import * as XLSX from 'xlsx';
 
 const EXPENSE_CATEGORIES = [
     { id: 'rent', label: 'الإيجار', color: 'bg-purple-100 text-purple-700' },
@@ -139,6 +140,97 @@ const GeneralExpenses: React.FC = () => {
       setNewExpense({ category: 'other', description: '', amount: 0, taxAmount: 0, date: new Date().toISOString().split('T')[0], paymentMethod: 'transfer', notes: '' });
   };
 
+  const filteredExpenses = useMemo(() => {
+      let result = expenses.filter(exp => {
+          const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase());
+          let matchesDate = true;
+          if (dateRange.start && dateRange.end) {
+              const expDate = new Date(exp.date);
+              matchesDate = expDate >= dateRange.start && expDate <= dateRange.end;
+          }
+          return matchesSearch && matchesDate;
+      });
+
+      if (sortKey && sortDirection) {
+          result = [...result].sort((a: any, b: any) => {
+              let valA, valB;
+              if (sortKey === 'total') {
+                  valA = a.amount + (a.taxAmount || 0);
+                  valB = b.amount + (b.taxAmount || 0);
+              } else {
+                  valA = a[sortKey];
+                  valB = b[sortKey];
+              }
+
+              if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+              if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+              return 0;
+          });
+      }
+
+      return result;
+  }, [expenses, searchTerm, dateRange, sortKey, sortDirection]);
+
+  const totals = useMemo(() => {
+      return filteredExpenses.reduce((acc, exp) => {
+          return {
+              amount: acc.amount + exp.amount,
+              tax: acc.tax + (exp.taxAmount || 0),
+              total: acc.total + (exp.amount + (exp.taxAmount || 0))
+          };
+      }, { amount: 0, tax: 0, total: 0 });
+  }, [filteredExpenses]);
+
+  const exportToExcel = () => {
+    if (filteredExpenses.length === 0) {
+      alert("لا توجد بيانات لتصديرها");
+      return;
+    }
+
+    const excelData = filteredExpenses.map(e => ({
+      'التاريخ': e.date,
+      'التصنيف': getCategoryLabel(e.category),
+      'الوصف': e.description,
+      'طريقة الدفع': e.paymentMethod === 'cash' ? 'نقدي' : 'حوالة بنكية',
+      'المبلغ (قبل الضريبة)': e.amount,
+      'الضريبة': e.taxAmount || 0,
+      'الإجمالي': e.amount + (e.taxAmount || 0)
+    }));
+
+    // Add totals
+    excelData.push({
+      'التاريخ': 'الإجمالي الكلي',
+      'التصنيف': '',
+      'الوصف': '',
+      'طريقة الدفع': '',
+      'المبلغ (قبل الضريبة)': totals.amount,
+      'الضريبة': totals.tax,
+      'الإجمالي': totals.total
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "المصاريف العامة");
+
+    const wscols = [
+      { wch: 15 }, // التاريخ
+      { wch: 18 }, // التصنيف
+      { wch: 30 }, // الوصف
+      { wch: 15 }, // الدفع
+      { wch: 18 }, // المبلغ
+      { wch: 12 }, // الضريبة
+      { wch: 18 }, // الإجمالي
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `سجل_المصاريف_العامة_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+  
+  const getCategoryLabel = (id: string) => EXPENSE_CATEGORIES.find(c => c.id === id)?.label || id;
+  const getCategoryColor = (id: string) => EXPENSE_CATEGORIES.find(c => c.id === id)?.color || 'bg-gray-100 text-gray-700';
+
+  const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const initiateEdit = (expense: GeneralExpense) => {
       setTempExpenseToEdit(expense);
       setAuthPassword('');
@@ -197,55 +289,9 @@ const GeneralExpenses: React.FC = () => {
       }
   };
 
-  const filteredExpenses = useMemo(() => {
-      let result = expenses.filter(exp => {
-          const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase());
-          let matchesDate = true;
-          if (dateRange.start && dateRange.end) {
-              const expDate = new Date(exp.date);
-              matchesDate = expDate >= dateRange.start && expDate <= dateRange.end;
-          }
-          return matchesSearch && matchesDate;
-      });
-
-      if (sortKey && sortDirection) {
-          result = [...result].sort((a: any, b: any) => {
-              let valA, valB;
-              if (sortKey === 'total') {
-                  valA = a.amount + (a.taxAmount || 0);
-                  valB = b.amount + (b.taxAmount || 0);
-              } else {
-                  valA = a[sortKey];
-                  valB = b[sortKey];
-              }
-
-              if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-              if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-              return 0;
-          });
-      }
-
-      return result;
-  }, [expenses, searchTerm, dateRange, sortKey, sortDirection]);
-
-  const totals = useMemo(() => {
-      return filteredExpenses.reduce((acc, exp) => {
-          return {
-              amount: acc.amount + exp.amount,
-              tax: acc.tax + (exp.taxAmount || 0),
-              total: acc.total + (exp.amount + (exp.taxAmount || 0))
-          };
-      }, { amount: 0, tax: 0, total: 0 });
-  }, [filteredExpenses]);
-  
-  const getCategoryLabel = (id: string) => EXPENSE_CATEGORIES.find(c => c.id === id)?.label || id;
-  const getCategoryColor = (id: string) => EXPENSE_CATEGORIES.find(c => c.id === id)?.color || 'bg-gray-100 text-gray-700';
-
-  const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2 text-right">
                 <PieChart className="text-indigo-600" />
@@ -255,7 +301,7 @@ const GeneralExpenses: React.FC = () => {
         </div>
         <button 
           onClick={() => { setEditingId(null); setNewExpense({ category: 'other', description: '', amount: 0, taxAmount: 0, date: new Date().toISOString().split('T')[0], paymentMethod: 'transfer', notes: '' }); setIsModalOpen(true); }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm font-bold text-sm"
         >
           <Plus size={18} />
           <span>تسجيل مصروف جديد</span>
@@ -263,12 +309,21 @@ const GeneralExpenses: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex gap-4">
-          <div className="relative flex-1">
+        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
             <Search className="absolute right-3 top-3 text-slate-400" size={18} />
             <input type="text" placeholder="بحث في المصاريف..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-600 text-center" dir="rtl" />
           </div>
-          <DateFilter onFilterChange={setDateRange} />
+          <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={exportToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-bold text-sm"
+              >
+                  <FileSpreadsheet size={18} />
+                  <span>تصدير Excel</span>
+              </button>
+              <DateFilter onFilterChange={setDateRange} />
+          </div>
         </div>
         
         {isLoading ? (
@@ -380,7 +435,7 @@ const GeneralExpenses: React.FC = () => {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-lg overflow-hidden animate-scale-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">{editingId ? 'تعديل المصروف' : 'تسجيل مصروف جديد'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
