@@ -6,7 +6,7 @@ import { DailyClosing } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 const FIXED_TERMINAL_IDS = [
-  '63427603', '63427604', '63427605', '64873724', '64073994', '64102585'
+  '63427603', '63427604', '63427605', '64073724', '64073994', '64102585'
 ];
 
 const CARD_LABELS: Record<string, string> = {
