@@ -62,6 +62,7 @@ export interface Purchase extends Transaction {
   paymentMethod?: 'cash' | 'credit' | 'transfer';
   skipInventory?: boolean; // New field: If true, items are not added to stock
   isTaxExempt?: boolean; // New field: Purchases without tax
+  discountAmount?: number; // New field for discounts
 }
 
 export interface Product {
