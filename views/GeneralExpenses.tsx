@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Trash2, Calendar, PieChart, Banknote, X, Save, AlertCircle, Loader2, Filter, AlertTriangle, Edit, Lock, CheckCircle2, FileSpreadsheet } from 'lucide-react';
+/* Added CreditCard to imports */
+import { Plus, Search, Trash2, Calendar, PieChart, Banknote, X, Save, AlertCircle, Loader2, Filter, AlertTriangle, Edit, Lock, CheckCircle2, FileSpreadsheet, Tag, CreditCard } from 'lucide-react';
 import { GeneralExpense } from '../types';
 import DateFilter, { DateRange, getThisMonthRange } from '../components/DateFilter';
 import { supabase } from '../services/supabaseClient';
@@ -101,7 +102,10 @@ const GeneralExpenses: React.FC = () => {
   };
 
   const handleSaveExpense = async () => {
-      if (!newExpense.description || !newExpense.amount) return;
+      if (!newExpense.description || !newExpense.amount) {
+          alert('يرجى تعبئة الحقول الأساسية (الوصف والمبلغ)');
+          return;
+      }
 
       const expenseData: any = {
           date: newExpense.date,
@@ -406,7 +410,7 @@ const GeneralExpenses: React.FC = () => {
       {/* Auth Modal for Editing */}
       {isAuthModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                 <Lock size={18} className="text-slate-500" />
@@ -432,62 +436,90 @@ const GeneralExpenses: React.FC = () => {
         </div>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal - COMPACT VERSION */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-lg overflow-hidden animate-scale-in">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in text-right" dir="rtl">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">{editingId ? 'تعديل المصروف' : 'تسجيل مصروف جديد'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                  <PieChart size={20} />
+                </div>
+                <h3 className="font-black text-slate-800">{editingId ? 'تعديل بيانات المصروف' : 'تسجيل مصروف جديد'}</h3>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-all"><X size={22} /></button>
             </div>
-            <div className="p-6 space-y-4">
+            
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">التاريخ</label>
-                    <input type="date" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value})} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <div className="space-y-1">
+                    <label className="block text-xs font-black text-slate-500 mr-1 flex items-center gap-1">
+                      <Calendar size={14} className="text-indigo-500" /> التاريخ
+                    </label>
+                    <input type="date" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50/50 font-bold text-sm" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">التصنيف</label>
-                    <select value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value as any})} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-black text-slate-500 mr-1 flex items-center gap-1">
+                      <Filter size={14} className="text-indigo-500" /> التصنيف
+                    </label>
+                    <select value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value as any})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-bold text-sm">
                       {EXPENSE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                     </select>
                   </div>
                </div>
-               <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">الوصف / البند</label>
-                  <input type="text" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} placeholder="مثال: فاتورة كهرباء شهر يوليو" className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-right" dir="rtl" />
+
+               <div className="space-y-1">
+                  <label className="block text-xs font-black text-slate-500 mr-1 flex items-center gap-1">
+                    <Tag size={14} className="text-indigo-500" /> الوصف أو البيان
+                  </label>
+                  <input type="text" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} placeholder="مثال: فاتورة صيانة المكيفات" className="w-full p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-right font-bold text-sm" />
                </div>
+
                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">المبلغ (قبل الضريبة)</label>
-                    <input type="number" value={newExpense.amount} onChange={e => setNewExpense({...newExpense, amount: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-center font-mono" />
+                  <div className="space-y-1">
+                    <label className="block text-xs font-black text-slate-500 mr-1">المبلغ (صافي)</label>
+                    <input type="number" value={newExpense.amount || ''} onChange={e => setNewExpense({...newExpense, amount: Number(e.target.value)})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-center font-black text-slate-800" placeholder="0.00" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1 text-blue-700">قيمة الضريبة (15%)</label>
-                    <input type="number" value={newExpense.taxAmount} onChange={e => setNewExpense({...newExpense, taxAmount: Number(e.target.value)})} className="w-full p-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center font-mono" />
-                  </div>
-               </div>
-               <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex justify-between items-center">
-                  <span className="font-bold text-indigo-700 text-sm">الإجمالي الكلي:</span>
-                  <span className="text-xl font-black text-indigo-800 font-mono">{(Number(newExpense.amount) + Number(newExpense.taxAmount)).toLocaleString()} ر.س</span>
-               </div>
-               <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">طريقة الدفع</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setNewExpense({...newExpense, paymentMethod: 'transfer'})} className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${newExpense.paymentMethod === 'transfer' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>حوالة بنكية</button>
-                        <button onClick={() => setNewExpense({...newExpense, paymentMethod: 'cash'})} className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${newExpense.paymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>نقدي (كاش)</button>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-black text-blue-600 mr-1">الضريبة (15%)</label>
+                    <input type="number" value={newExpense.taxAmount || ''} onChange={e => setNewExpense({...newExpense, taxAmount: Number(e.target.value)})} className="w-full p-2.5 border border-blue-100 bg-blue-50/30 text-blue-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center font-black" placeholder="0.00" />
                   </div>
                </div>
-               <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">ملاحظات إضافية</label>
-                  <textarea value={newExpense.notes} onChange={e => setNewExpense({...newExpense, notes: e.target.value})} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-right h-20" dir="rtl"></textarea>
+
+               <div className="bg-indigo-600 rounded-2xl p-4 flex justify-between items-center text-white shadow-lg shadow-indigo-100 border-2 border-indigo-500">
+                  <span className="font-black text-indigo-100 text-sm">الإجمالي النهائي:</span>
+                  <div className="text-left">
+                    <span className="text-2xl font-black font-mono">{(Number(newExpense.amount) + Number(newExpense.taxAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-[10px] mr-1 font-bold">ر.س</span>
+                  </div>
+               </div>
+
+               <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-500 mr-1 flex items-center gap-1">
+                    <Banknote size={14} className="text-indigo-500" /> طريقة الدفع
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setNewExpense({...newExpense, paymentMethod: 'transfer'})} className={`py-3 rounded-xl border-2 font-black transition-all text-xs flex items-center justify-center gap-2 ${newExpense.paymentMethod === 'transfer' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+                        <CreditCard size={16} /> حوالة بنكية
+                      </button>
+                      <button onClick={() => setNewExpense({...newExpense, paymentMethod: 'cash'})} className={`py-3 rounded-xl border-2 font-black transition-all text-xs flex items-center justify-center gap-2 ${newExpense.paymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+                        <Banknote size={16} /> نقدي (كاش)
+                      </button>
+                  </div>
+               </div>
+
+               <div className="space-y-1">
+                  <label className="block text-xs font-black text-slate-500 mr-1">ملاحظات</label>
+                  <textarea value={newExpense.notes} onChange={e => setNewExpense({...newExpense, notes: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-right h-16 font-medium text-sm" placeholder="أي تفاصيل إضافية..."></textarea>
                </div>
             </div>
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-               <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 font-bold">إلغاء</button>
-               <button onClick={handleSaveExpense} className="px-8 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center gap-2"><Save size={18} /><span>{editingId ? 'حفظ التغييرات' : 'تسجيل المصروف'}</span></button>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+               <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-slate-500 font-bold text-sm">إلغاء</button>
+               <button onClick={handleSaveExpense} className="flex-1 max-w-[200px] py-2.5 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2 text-sm">
+                 <Save size={18} />
+                 <span>{editingId ? 'تحديث المصروف' : 'تسجيل وحفظ'}</span>
+               </button>
             </div>
           </div>
         </div>
