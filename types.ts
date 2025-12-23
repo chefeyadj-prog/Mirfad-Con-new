@@ -34,35 +34,35 @@ export interface DailyClosing {
   vatAmount: number;
   discountAmount: number;
   grossSales: number;
-  tips: number; // New field for Tips
+  tips: number;
 
-  // Details for viewing later
+  // Details
   details: {
     cashDenominations: Record<string, number>;
     cardReconcile: Record<string, number>;
     posInputs: Record<string, number>;
-    terminalDetails?: Record<string, Record<string, number>>; // New field for detailed terminal inputs
+    terminalDetails?: Record<string, Record<string, number>>;
   };
 }
 
 export interface InvoiceItem {
   id: string;
-  code?: string; // SKU or Barcode
+  code?: string;
   description: string;
   quantity: number;
   unitPrice: number;
 }
 
 export interface Purchase extends Transaction {
-  invoiceNumber?: string; // Visual Invoice Number (can be duplicate across suppliers)
+  invoiceNumber?: string;
   status: 'received' | 'ordered';
   items?: InvoiceItem[];
   currency?: string;
   taxNumber?: string;
   paymentMethod?: 'cash' | 'credit' | 'transfer';
-  skipInventory?: boolean; // New field: If true, items are not added to stock
-  isTaxExempt?: boolean; // New field: Purchases without tax
-  discountAmount?: number; // New field for discounts
+  skipInventory?: boolean;
+  isTaxExempt?: boolean;
+  discountAmount?: number;
 }
 
 export interface Product {
@@ -73,7 +73,7 @@ export interface Product {
   price: number;
   cost: number;
   category: string;
-  createdAt?: string; // Added for date filtering
+  createdAt?: string;
 }
 
 export interface Supplier {
@@ -82,16 +82,16 @@ export interface Supplier {
   phone: string;
   balance: number;
   taxNumber?: string;
-  code?: string; // Supplier Prefix Code (e.g., 200)
+  code?: string;
 }
 
 export interface Employee {
   id: string;
-  code?: string; // Employee ID / Job Number
+  code?: string;
   name: string;
   role: string;
   phone?: string;
-  salary: number; // Basic Salary
+  salary: number;
   joinDate?: string;
 }
 
@@ -113,11 +113,24 @@ export interface Custody {
   amount: number;
   dateGiven: string;
   status: 'active' | 'closed';
-  expenses?: number; // Only when closing
-  returnAmount?: number; // Only when closing
+  expenses?: number;
+  returnAmount?: number;
   notes?: string;
 }
 
+export interface GeneralExpense {
+  id: string;
+  date: string;
+  category: 'rent' | 'electricity' | 'maintenance' | 'marketing' | 'gov_fees' | 'flight_tickets' | 'other';
+  description: string;
+  amount: number;
+  taxAmount?: number;
+  paymentMethod: 'cash' | 'transfer';
+  notes?: string;
+  createdAt?: string;
+}
+
+// Fix: Define PaperExpense interface to resolve import error in PaperExpenses.tsx
 export interface PaperExpense {
   id: string;
   date: string;
@@ -127,43 +140,13 @@ export interface PaperExpense {
   createdAt?: string;
 }
 
-export interface GeneralExpense {
-  id: string;
-  date: string;
-  category: 'rent' | 'electricity' | 'maintenance' | 'marketing' | 'gov_fees' | 'flight_tickets' | 'other';
-  description: string;
-  amount: number;
-  taxAmount?: number; // Added Tax Amount
-  paymentMethod: 'cash' | 'transfer';
-  notes?: string;
-  createdAt?: string;
-}
-
-export interface RetroactiveRecord {
-  id: string;
-  originalDate: string;
-  recordDate: string;
-  type: 'income' | 'expense';
-  category: string;
-  amount: number;
-  description: string;
-  createdAt: string;
-}
-
-export interface DashboardStats {
-  totalSales: number;
-  totalPurchases: number;
-  netProfit: number;
-  lowStockCount: number;
-}
-
-// Authentication Types
-export type UserRole = 'owner' | 'admin' | 'accountant' | 'cashier' | 'chef';
+// Authentication Types - Updated Roles
+// Fix: Add 'chef' to UserRole to resolve type overlap errors in Dashboard.tsx comparisons
+export type UserRole = 'it' | 'owner' | 'admin' | 'accountant' | 'cashier' | 'chef';
 
 export interface User {
   id: string;
   username: string;
-  password?: string; // In real app, never store plain password
   name: string;
   role: UserRole;
   avatar?: string;
@@ -177,7 +160,7 @@ export interface AuditLogEntry {
   user_name: string;
   user_role: string;
   action: 'create' | 'update' | 'delete' | 'login';
-  resource: string; // e.g., 'المشتريات', 'المخزون', 'الموردين'
-  details: string; // Detailed description of the action
+  resource: string;
+  details: string;
   timestamp: string;
 }
