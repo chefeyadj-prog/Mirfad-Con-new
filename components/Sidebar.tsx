@@ -13,16 +13,17 @@ import {
   LogOut,
   Server,
   PieChart,
-  CalendarCheck,
   ShieldCheck,
   History,
   Database,
   LockKeyhole
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
 
 const Sidebar = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
+  const { hasPageAccess } = usePermissions();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -30,65 +31,64 @@ const Sidebar = () => {
     navigate('/login');
   };
 
-  // Define Navigation with Roles
-  const allNavItems = [
-    { to: '/', icon: LayoutDashboard, label: 'لوحة التحكم', roles: ['it', 'owner', 'admin', 'accountant', 'cashier'] },
-    { to: '/sales', icon: ShoppingCart, label: 'تقفيل المبيعات اليومي', roles: ['it', 'owner', 'admin', 'cashier'] },
-    { to: '/terminals', icon: Server, label: 'أجهزة الشبكة', roles: ['it', 'owner', 'admin', 'accountant'] },
-    { to: '/purchases', icon: ShoppingBag, label: 'المشتريات', roles: ['it', 'owner', 'admin', 'accountant'] },
-    { to: '/inventory', icon: Package, label: 'المخزون', roles: ['it', 'owner', 'admin', 'accountant', 'cashier'] },
-    { to: '/custody', icon: Wallet, label: 'العهد المالية', roles: ['it', 'owner', 'admin', 'cashier'] },
-    { to: '/general-expenses', icon: PieChart, label: 'المصاريف العامة', roles: ['it', 'owner', 'admin', 'accountant'] },
-    { to: '/suppliers', icon: Users, label: 'الموردين', roles: ['it', 'owner', 'admin', 'accountant'] },
-    { to: '/salaries', icon: Banknote, label: 'الرواتب', roles: ['it', 'owner', 'admin', 'accountant'] },
-    { to: '/retroactive', icon: History, label: 'الأثر الرجعي', roles: ['it', 'owner', 'admin', 'accountant'] },
-    
-    // Protected - Owner & IT
-    { to: '/reports', icon: FileText, label: 'التقارير الذكية', roles: ['it', 'owner'] },
-    { to: '/backups', icon: Database, label: 'النسخ الاحتياطية', roles: ['it', 'owner'] },
-    { to: '/audit-logs', icon: ShieldCheck, label: 'سجل الحركات', roles: ['it', 'owner'] },
-    
-    // EXCLUSIVE - IT ONLY
-    { to: '/permissions', icon: LockKeyhole, label: 'إدارة الصلاحيات', roles: ['it'] },
+  const navItems = [
+    { to: '/', icon: LayoutDashboard, label: 'لوحة التحكم', pKey: 'dashboard' },
+    { to: '/sales', icon: ShoppingCart, label: 'تقفيل المبيعات اليومي', pKey: 'sales' },
+    { to: '/terminals', icon: Server, label: 'أجهزة الشبكة', pKey: 'terminals' },
+    { to: '/purchases', icon: ShoppingBag, label: 'المشتريات', pKey: 'purchases' },
+    { to: '/inventory', icon: Package, label: 'المخزون', pKey: 'inventory' },
+    { to: '/custody', icon: Wallet, label: 'العهد المالية', pKey: 'custody' },
+    { to: '/general-expenses', icon: PieChart, label: 'المصاريف العامة', pKey: 'general_expenses' },
+    { to: '/suppliers', icon: Users, label: 'الموردين', pKey: 'suppliers' },
+    { to: '/salaries', icon: Banknote, label: 'الرواتب', pKey: 'salaries' },
+    { to: '/retroactive', icon: History, label: 'الأثر الرجعي', pKey: 'retroactive' },
+    { to: '/reports', icon: FileText, label: 'التقارير الذكية', pKey: 'reports' },
+    { to: '/backups', icon: Database, label: 'النسخ الاحتياطية', pKey: 'backups' },
+    { to: '/audit-logs', icon: ShieldCheck, label: 'سجل الحركات', pKey: 'audit_logs' },
+    { to: '/permissions', icon: LockKeyhole, label: 'إدارة الصلاحيات', pKey: 'permissions' },
   ];
 
-  const allowedItems = allNavItems.filter(item => user && item.roles.includes(user.role));
+  const allowedItems = navItems.filter(item => hasPageAccess(item.pKey));
 
   return (
-    <div className="w-64 bg-slate-900 text-white min-h-screen flex flex-col shadow-xl print:hidden">
-      <div className="p-6 border-b border-slate-700 flex items-center justify-center">
-        <div className="text-2xl font-bold text-indigo-400">Mirfad | مِرفـــاد</div>
+    <div className="w-64 bg-slate-900 text-white min-h-screen flex flex-col shadow-xl print:hidden sticky top-0" dir="rtl">
+      <div className="p-6 border-b border-slate-800 flex items-center justify-center">
+        <div className="text-2xl font-black text-white tracking-tighter">Mirfad | <span className="text-indigo-400">مِرفـــاد</span></div>
       </div>
       
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
         {allowedItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-sm ${
                 isActive 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`
             }
           >
-            <item.icon size={18} />
-            <span className="font-medium text-sm">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                <item.icon size={18} className={isActive ? 'text-white' : 'text-indigo-400'} />
+                <span>{item.label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-700 bg-slate-950/50">
+      <div className="p-4 border-t border-slate-800 bg-slate-950/30">
         <button 
           onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+          className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors font-bold text-sm"
         >
-          <LogOut size={20} />
-          <span className="font-medium">تسجيل الخروج</span>
+          <LogOut size={18} />
+          <span>تسجيل الخروج</span>
         </button>
-        <div className="mt-4 text-[10px] text-center text-slate-500 uppercase tracking-widest font-bold">
-           System Engine v1.3.0
+        <div className="mt-4 text-[9px] text-center text-slate-600 uppercase tracking-widest font-black">
+           Governance System v1.5.0
         </div>
       </div>
     </div>
