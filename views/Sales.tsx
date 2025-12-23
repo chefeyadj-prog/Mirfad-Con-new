@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Search, Lock, Calendar, Calculator, Coins, FileText, Banknote, ArrowRight, Eye, Edit, X, CreditCard, Server, Trash2, AlertTriangle, CheckCircle2, Save, Tag, Info, Gift, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Lock, Calendar, Calculator, Coins, FileText, Banknote, ArrowRight, Eye, Edit, X, CreditCard, Server, Trash2, AlertTriangle, CheckCircle2, Save, Tag, Info, Gift, TrendingUp, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyClosing } from '../types';
 import DateFilter, { DateRange } from '../components/DateFilter';
@@ -8,6 +8,7 @@ import { supabase } from '../services/supabaseClient';
 import { logAction } from '../services/auditLogService';
 import { useAuth } from '../context/AuthContext';
 import { round, calculateNetFromGross } from '../utils/mathUtils';
+import * as XLSX from 'xlsx';
 
 const FIXED_TERMINAL_IDS = [
   '63427603', '63427604', '63427605', '64073724', '64073994', '64102585'
@@ -197,6 +198,53 @@ const Sales: React.FC = () => {
     });
   }, [filteredClosings]);
 
+  const exportToExcel = () => {
+    if (filteredClosings.length === 0) {
+        alert("لا توجد بيانات للتصدير");
+        return;
+    }
+
+    const excelData = filteredClosings.map(c => {
+        const grossBefore = (c.totalSystem || 0) + (c.discountAmount || 0);
+        const netIncome = (c.totalSystem || 0) - (c.tips || 0);
+        return {
+            'التاريخ': c.date,
+            'الإجمالي قبل الخصم': grossBefore,
+            'الخصومات': c.discountAmount,
+            'الإجمالي بعد الخصم': c.totalSystem,
+            'المكافآت': c.tips,
+            'صافي الدخل': netIncome,
+            'النقد الفعلي': c.cashActual,
+            'الشبكة الفعلية': c.cardActual,
+            'العجز / الزيادة': c.variance
+        };
+    });
+
+    excelData.push({
+        'التاريخ': 'الإجمالي الكلي',
+        'الإجمالي قبل الخصم': totalsSummary.grossBefore,
+        'الخصومات': totalsSummary.discount,
+        'الإجمالي بعد الخصم': totalsSummary.totalSystem,
+        'المكافآت': totalsSummary.tips,
+        'صافي الدخل': totalsSummary.netIncome,
+        'النقد الفعلي': totalsSummary.cashActual,
+        'الشبكة الفعلية': totalsSummary.cardActual,
+        'العجز / الزيادة': totalsSummary.variance
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Z-Reports");
+
+    const wscols = [
+        { wch: 15 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+    ];
+    worksheet['!cols'] = wscols;
+
+    const fileName = `سجل_الإقفالات_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   const verifyAndEdit = () => {
     if (authPassword === '1234') {
         if (selectedClosingForEdit) {
@@ -248,7 +296,7 @@ const Sales: React.FC = () => {
             </div>
             <button
               onClick={() => { resetForm(); setShowClosingModal(true); }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 shadow-md transition-colors font-bold text-sm"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 shadow-md transition-colors font-black text-sm"
             >
                 <Plus size={18} />
                 <span>تسجيل إقفال جديد</span>
@@ -264,47 +312,53 @@ const Sales: React.FC = () => {
                       placeholder="بحث بالتاريخ..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm text-slate-700 placeholder:text-slate-400 text-center"
+                      className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-base font-bold text-slate-700 placeholder:text-slate-400 text-center"
                     />
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <span className="text-slate-500 font-bold hidden md:inline text-sm">سجل العمليات</span>
+                    <button 
+                        onClick={exportToExcel}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-black text-sm"
+                    >
+                        <FileSpreadsheet size={18} />
+                        <span>تصدير Excel</span>
+                    </button>
                     <DateFilter onFilterChange={setDateRange} />
                 </div>
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full text-center text-sm">
-                    <thead className="bg-white text-slate-500 border-b border-slate-100">
-                        <tr>
-                            <th onClick={() => handleSort('date')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                <table className="w-full text-center text-base">
+                    <thead className="bg-white text-slate-600 border-b border-slate-100">
+                        <tr className="font-black">
+                            <th onClick={() => handleSort('date')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center border-l border-slate-50">
                                 التاريخ {renderSortIcon('date')}
                             </th>
-                            <th onClick={() => handleSort('grossBefore')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('grossBefore')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 الإجمالي قبل الخصم {renderSortIcon('grossBefore')}
                             </th>
-                            <th onClick={() => handleSort('discountAmount')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('discountAmount')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 الخصومات {renderSortIcon('discountAmount')}
                             </th>
-                            <th onClick={() => handleSort('totalSystem')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('totalSystem')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 الإجمالي بعد الخصم {renderSortIcon('totalSystem')}
                             </th>
-                            <th onClick={() => handleSort('tips')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('tips')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 المكافآت {renderSortIcon('tips')}
                             </th>
-                            <th onClick={() => handleSort('netIncome')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('netIncome')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 صافي الدخل {renderSortIcon('netIncome')}
                             </th>
-                            <th onClick={() => handleSort('cashActual')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('cashActual')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 النقد الفعلي {renderSortIcon('cashActual')}
                             </th>
-                            <th onClick={() => handleSort('cardActual')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('cardActual')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 الشبكة الفعلية {renderSortIcon('cardActual')}
                             </th>
-                            <th onClick={() => handleSort('variance')} className="p-4 font-bold whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
+                            <th onClick={() => handleSort('variance')} className="p-4 whitespace-nowrap cursor-pointer hover:text-indigo-600 transition-colors text-center">
                                 العجز / الزيادة {renderSortIcon('variance')}
                             </th>
-                            <th className="p-4 font-bold whitespace-nowrap text-center">الإجراءات</th>
+                            <th className="p-4 whitespace-nowrap text-center border-r border-slate-50">الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -313,24 +367,24 @@ const Sales: React.FC = () => {
                           const netIncome = (closing.totalSystem || 0) - (closing.tips || 0);
                           return (
                             <tr key={closing.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-4 font-bold text-slate-800 whitespace-nowrap text-center">{closing.date}</td>
-                                <td className="p-4 font-bold text-slate-700 font-mono text-center">{formatCurrency(grossBefore)}</td>
-                                <td className="p-4 font-bold text-red-600 font-mono text-center">{formatCurrency(closing.discountAmount)}</td>
-                                <td className="p-4 font-bold text-blue-700 bg-blue-50/30 font-mono text-center">{formatCurrency(closing.totalSystem)}</td>
-                                <td className="p-4 font-bold text-blue-500 font-mono text-center">{formatCurrency(closing.tips)}</td>
-                                <td className="p-4 font-bold text-indigo-700 font-mono text-center">{formatCurrency(netIncome)}</td>
-                                <td className="p-4 text-slate-600 font-mono text-center">{formatCurrency(closing.cashActual)}</td>
-                                <td className="p-4 text-slate-600 font-mono text-center">{formatCurrency(closing.cardActual)}</td>
+                                <td className="p-4 font-black text-slate-800 whitespace-nowrap text-center border-l border-slate-50">{closing.date}</td>
+                                <td className="p-4 font-black text-slate-700 font-mono text-center">{formatCurrency(grossBefore)}</td>
+                                <td className="p-4 font-black text-red-700 font-mono text-center">{formatCurrency(closing.discountAmount)}</td>
+                                <td className="p-4 font-black text-blue-800 bg-blue-50/20 font-mono text-center">{formatCurrency(closing.totalSystem)}</td>
+                                <td className="p-4 font-black text-blue-600 font-mono text-center">{formatCurrency(closing.tips)}</td>
+                                <td className="p-4 font-black text-indigo-800 font-mono text-center">{formatCurrency(netIncome)}</td>
+                                <td className="p-4 font-black text-slate-700 font-mono text-center">{formatCurrency(closing.cashActual)}</td>
+                                <td className="p-4 font-black text-slate-700 font-mono text-center">{formatCurrency(closing.cardActual)}</td>
                                 <td className="p-4 whitespace-nowrap text-center">
-                                    <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono min-w-[90px] ${closing.variance === 0 ? 'bg-slate-100 text-slate-500' : closing.variance > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    <span className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-black font-mono min-w-[110px] ${closing.variance === 0 ? 'bg-slate-100 text-slate-500' : closing.variance > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                         {closing.variance > 0 ? '+' : ''}{formatCurrency(closing.variance)}
                                     </span>
                                 </td>
-                                <td className="p-4 text-center">
+                                <td className="p-4 text-center border-r border-slate-50">
                                     <div className="flex justify-center gap-2">
-                                        <button onClick={() => navigate(`/sales/${closing.id}`)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye size={18} /></button>
-                                        <button onClick={() => { setSelectedClosingForEdit(closing); setIsAuthModalOpen(true); }} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Edit size={18} /></button>
-                                        <button onClick={() => { setClosingToDelete(closing.id); setIsDeleteModalOpen(true); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
+                                        <button onClick={() => navigate(`/sales/${closing.id}`)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye size={22} /></button>
+                                        <button onClick={() => { setSelectedClosingForEdit(closing); setIsAuthModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Edit size={22} /></button>
+                                        <button onClick={() => { setClosingToDelete(closing.id); setIsDeleteModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={22} /></button>
                                     </div>
                                 </td>
                             </tr>
@@ -338,21 +392,21 @@ const Sales: React.FC = () => {
                         })}
                     </tbody>
                     <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-                        <tr className="font-black text-slate-800 text-center">
-                            <td className="p-4 text-center">الإجمالي</td>
-                            <td className="p-4 font-mono text-center">{formatCurrency(totalsSummary.grossBefore)}</td>
-                            <td className="p-4 font-mono text-red-700 text-center">{formatCurrency(totalsSummary.discount)}</td>
-                            <td className="p-4 font-mono text-blue-700 bg-blue-50/50 text-center">{formatCurrency(totalsSummary.totalSystem)}</td>
-                            <td className="p-4 font-mono text-blue-600 text-center">{formatCurrency(totalsSummary.tips)}</td>
-                            <td className="p-4 font-mono text-indigo-700 text-center">{formatCurrency(totalsSummary.netIncome)}</td>
-                            <td className="p-4 font-mono text-center">{formatCurrency(totalsSummary.cashActual)}</td>
-                            <td className="p-4 font-mono text-center">{formatCurrency(totalsSummary.cardActual)}</td>
-                            <td className="p-4 whitespace-nowrap text-center">
-                                <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono min-w-[90px] ${totalsSummary.variance === 0 ? 'bg-slate-200 text-slate-600' : totalsSummary.variance > 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        <tr className="font-black text-slate-900 text-lg text-center">
+                            <td className="p-5 text-center border-l border-slate-200">الإجمالي الكلي</td>
+                            <td className="p-5 font-mono text-center">{formatCurrency(totalsSummary.grossBefore)}</td>
+                            <td className="p-5 font-mono text-red-800 text-center">{formatCurrency(totalsSummary.discount)}</td>
+                            <td className="p-5 font-mono text-blue-900 bg-blue-100/30 text-center">{formatCurrency(totalsSummary.totalSystem)}</td>
+                            <td className="p-5 font-mono text-blue-700 text-center">{formatCurrency(totalsSummary.tips)}</td>
+                            <td className="p-5 font-mono text-indigo-900 text-center">{formatCurrency(totalsSummary.netIncome)}</td>
+                            <td className="p-5 font-mono text-center">{formatCurrency(totalsSummary.cashActual)}</td>
+                            <td className="p-5 font-mono text-center">{formatCurrency(totalsSummary.cardActual)}</td>
+                            <td className="p-5 whitespace-nowrap text-center">
+                                <span className={`inline-flex items-center justify-center px-5 py-2 rounded-full font-black font-mono min-w-[130px] ${totalsSummary.variance === 0 ? 'bg-slate-200 text-slate-600' : totalsSummary.variance > 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                                     {totalsSummary.variance > 0 ? '+' : ''}{formatCurrency(totalsSummary.variance)}
                                 </span>
                             </td>
-                            <td />
+                            <td className="border-r border-slate-200" />
                         </tr>
                     </tfoot>
                 </table>
@@ -382,7 +436,6 @@ const Sales: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* Right Side Column (Cash and Summary) */}
                 <div className="lg:col-span-4 space-y-4">
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-800 flex items-center justify-between text-sm">
@@ -449,7 +502,6 @@ const Sales: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Left Side Column (Terminals and Comparison) */}
                 <div className="lg:col-span-8 space-y-4">
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-800 flex flex-col">
@@ -592,7 +644,7 @@ const Sales: React.FC = () => {
             </div>
             <div className="p-6">
               <p className="text-slate-500 text-sm text-center mb-5 font-medium">يرجى إدخال رمز المرور للسماح بتعديل بيانات الإقفال المسجلة.</p>
-              <input type="password" autoFocus className={`w-full p-3 border rounded-lg text-center font-mono text-lg outline-none mb-2 ${authError ? 'border-red-500 bg-red-50 animate-shake' : 'border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100'}`} placeholder="****" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && verifyAndEdit()} />
+              <input type="password" autoFocus className={`w-full p-3 border rounded-lg text-center font-mono text-lg outline-none mb-2 ${authError ? 'border-red-500 bg-red-50' : 'border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100'}`} placeholder="****" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && verifyAndEdit()} />
               {authError && <p className="text-xs text-red-500 mt-2 text-center font-bold">{authError}</p>}
               <button onClick={verifyAndEdit} className="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-bold mt-4 hover:bg-indigo-700 shadow-md transition-colors">تحقق ومتابعة التعديل</button>
             </div>
