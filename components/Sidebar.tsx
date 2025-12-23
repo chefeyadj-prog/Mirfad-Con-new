@@ -53,7 +53,7 @@ const Sidebar = () => {
   return (
     <div className="w-64 bg-slate-900 text-white min-h-screen flex flex-col shadow-xl print:hidden sticky top-0" dir="rtl">
       <div className="p-6 border-b border-slate-800 flex items-center justify-center">
-        <div className="text-2xl font-black text-white tracking-tighter">Mirfad | <span className="text-indigo-400">مِرفـــاد</span></div>
+        <div className="text-2xl font-bold text-indigo-400">Mirfad | مِرفـــاد</div>
       </div>
       
       <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
