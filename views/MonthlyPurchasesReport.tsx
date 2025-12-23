@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Printer, Filter, Building } from 'lucide-react';
+import { Calendar, Printer, Filter, Building, FileSpreadsheet } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { Purchase } from '../types';
+import * as XLSX from 'xlsx';
 
 interface SupplierSummary {
   supplierName: string;
@@ -80,6 +81,42 @@ const MonthlyPurchasesReport: React.FC = () => {
     setOverallTotal(result.reduce((sum, item) => sum + item.grandTotal, 0));
   };
 
+  const exportToExcel = () => {
+    if (summaryData.length === 0) {
+      alert("لا توجد بيانات لتصديرها");
+      return;
+    }
+
+    const excelData = summaryData.map(item => ({
+      'المورد': item.supplierName,
+      'الإجمالي (بدون ضريبة)': item.totalNet,
+      'إجمالي الضريبة': item.totalVat,
+      'إجمالي الفواتير': item.grandTotal
+    }));
+
+    // Add totals
+    excelData.push({
+      'المورد': 'الإجمالي الكلي',
+      'الإجمالي (بدون ضريبة)': summaryData.reduce((s, i) => s + i.totalNet, 0),
+      'إجمالي الضريبة': summaryData.reduce((s, i) => s + i.totalVat, 0),
+      'إجمالي الفواتير': overallTotal
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير مشتريات");
+
+    const wscols = [
+      { wch: 30 }, // المورد
+      { wch: 20 }, // صافي
+      { wch: 15 }, // ضريبة
+      { wch: 20 }, // إجمالي
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `تقرير_مشتريات_${selectedMonth}.xlsx`);
+  };
+
   const formatMoney = (amount: number) => 
     amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -95,7 +132,7 @@ const MonthlyPurchasesReport: React.FC = () => {
            <p className="text-slate-500 text-sm mt-1">ملخص المشتريات حسب المورد للشهر المحدد</p>
         </div>
 
-        <div className="flex items-center gap-4 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
+        <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
            <span className="text-sm font-bold text-slate-600 pl-2 border-l border-slate-200 ml-2">اختر الشهر:</span>
            <input 
              type="month" 
@@ -103,13 +140,22 @@ const MonthlyPurchasesReport: React.FC = () => {
              onChange={(e) => setSelectedMonth(e.target.value)}
              className="outline-none text-slate-700 font-mono bg-transparent"
            />
-           <button 
-             onClick={() => window.print()}
-             className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-900 transition-colors mr-2"
-             title="طباعة"
-           >
-             <Printer size={20} />
-           </button>
+           <div className="flex items-center gap-2 mr-2">
+               <button 
+                onClick={exportToExcel}
+                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-bold text-sm"
+               >
+                  <FileSpreadsheet size={18} />
+                  <span>Excel</span>
+               </button>
+               <button 
+                 onClick={() => window.print()}
+                 className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-900 transition-colors"
+                 title="طباعة"
+               >
+                 <Printer size={20} />
+               </button>
+           </div>
         </div>
       </div>
 
