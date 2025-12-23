@@ -16,16 +16,17 @@ import Suppliers from './views/Suppliers';
 import SupplierStatement from './views/SupplierStatement';
 import Salaries from './views/Salaries';
 import Reports from './views/Reports';
+import Backups from './views/Backups';
 import GeneralExpenses from './views/GeneralExpenses';
 import Login from './views/Login';
 import MonthlyPurchasesReport from './views/MonthlyPurchasesReport';
 import AuditLogs from './views/AuditLogs';
 import Retroactive from './views/Retroactive';
+import PermissionsManagement from './views/PermissionsManagement';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { supabase } from './services/supabaseClient';
 
-// Layout component to wrap Sidebar and Main Content
 const AppLayout = () => {
   const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -33,21 +34,18 @@ const AppLayout = () => {
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-     // Fetch low stock items initially
      const fetchAlerts = async () => {
          const { data } = await supabase.from('products').select('id, name, quantity').lt('quantity', 5);
          if (data) setLowStockItems(data);
      };
      fetchAlerts();
      
-     // Subscribe to changes in products to update alerts in real-time
      const channel = supabase.channel('app-alerts')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, fetchAlerts)
         .subscribe();
      return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Close notifications when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -66,13 +64,10 @@ const AppLayout = () => {
           <h1 className="text-xl font-bold text-slate-700">نظام إدارة الموارد</h1>
           
           <div className="flex items-center gap-6">
-            
-            {/* Notification Bell */}
             <div className="relative" ref={notifRef}>
                 <button 
                     onClick={() => setNotificationsOpen(!notificationsOpen)} 
                     className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors relative"
-                    title="التنبيهات"
                 >
                     <Bell size={22} />
                     {lowStockItems.length > 0 && (
@@ -113,20 +108,10 @@ const AppLayout = () => {
                                 </div>
                             ) : (
                                 <div className="p-8 text-center">
-                                    <div className="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
-                                        <Bell size={20} />
-                                    </div>
                                     <p className="text-sm text-slate-500">لا توجد تنبيهات حالياً</p>
                                 </div>
                             )}
                         </div>
-                        {lowStockItems.length > 0 && (
-                            <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
-                                <Link to="/inventory" onClick={() => setNotificationsOpen(false)} className="text-xs font-bold text-indigo-600 hover:underline">
-                                    عرض سجل المخزون
-                                </Link>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>
@@ -134,13 +119,12 @@ const AppLayout = () => {
             <div className="flex items-center gap-4 border-r border-slate-100 pr-6">
                 <div className="text-right">
                 <span className="block text-sm font-bold text-slate-700">{user?.name}</span>
-                <span className="block text-xs text-slate-500 capitalize">{user?.role}</span>
+                <span className="block text-xs text-slate-500 uppercase font-bold">{user?.role}</span>
                 </div>
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold uppercase">
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
                 {user?.name.charAt(0)}
                 </div>
             </div>
-
           </div>
         </header>
         <div className="p-8 print:p-0">
@@ -158,29 +142,22 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
              <Route element={<AppLayout />}>
-                
-                {/* Everyone can see Dashboard */}
                 <Route path="/" element={<Dashboard />} />
                 
-                {/* Sales & Closings: Owner + Admin + Cashier + Chef */}
-                <Route element={<ProtectedRoute allowedRoles={['owner', 'admin', 'cashier', 'chef']} />}>
+                <Route element={<ProtectedRoute allowedRoles={['it', 'owner', 'admin', 'cashier']} />}>
                    <Route path="/sales" element={<Sales />} />
                    <Route path="/sales/:id" element={<DailyClosingDetails />} />
                    <Route path="/custody" element={<Custody />} />
                 </Route>
 
-                {/* Purchases, Suppliers, Salaries, Terminals: Owner + Admin + Accountant */}
-                <Route element={<ProtectedRoute allowedRoles={['owner', 'admin', 'accountant']} />}>
+                <Route element={<ProtectedRoute allowedRoles={['it', 'owner', 'admin', 'accountant']} />}>
                    <Route path="/terminals" element={<Terminals />} />
                    <Route path="/purchases" element={<Purchases />} />
                    <Route path="/purchases/new" element={<CreatePurchase />} />
                    <Route path="/purchases/edit/:id" element={<CreatePurchase />} />
                    <Route path="/purchases/:id" element={<PurchaseDetails />} />
-                   <Route path="/monthly-purchases" element={<MonthlyPurchasesReport />} />
-                   
                    <Route path="/suppliers" element={<Suppliers />} />
                    <Route path="/suppliers/:id" element={<SupplierStatement />} />
                    <Route path="/salaries" element={<Salaries />} />
@@ -188,15 +165,18 @@ const App: React.FC = () => {
                    <Route path="/retroactive" element={<Retroactive />} />
                 </Route>
 
-                {/* Reports & Logs: Owner Only */}
-                <Route element={<ProtectedRoute allowedRoles={['owner']} />}>
+                <Route element={<ProtectedRoute allowedRoles={['it', 'owner']} />}>
                    <Route path="/reports" element={<Reports />} />
+                   <Route path="/backups" element={<Backups />} />
                    <Route path="/audit-logs" element={<AuditLogs />} />
                 </Route>
 
-                {/* Inventory: Everyone */}
+                {/* EXCLUSIVE IT ROUTE */}
+                <Route element={<ProtectedRoute allowedRoles={['it']} />}>
+                   <Route path="/permissions" element={<PermissionsManagement />} />
+                </Route>
+
                 <Route path="/inventory" element={<Inventory />} />
-                
                 <Route path="*" element={<Navigate to="/" replace />} />
              </Route>
           </Route>
