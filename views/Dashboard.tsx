@@ -67,7 +67,11 @@ const Dashboard: React.FC = () => {
     const filteredPurchases = allPurchases.filter(p => filterByDate(p.date));
     const filteredExpenses = allExpenses.filter(e => filterByDate(e.date));
 
-    const totalSales = round(filteredClosings.reduce((sum, item) => sum + (item.grossSales || item.totalSystem || 0), 0));
+    // تم تغيير الحساب ليعتمد على "صافي الدخل" (الإجمالي بعد الخصم - المكافآت)
+    const totalSales = round(filteredClosings.reduce((sum, item) => 
+      sum + ((item.totalSystem || 0) - (item.tips || 0)), 0)
+    );
+    
     const totalCashSales = round(filteredClosings.reduce((sum, item) => sum + (item.cashActual || 0), 0));
     const totalPurchases = round(filteredPurchases.reduce((sum, item) => sum + item.amount, 0));
     const totalGeneralExpenses = round(filteredExpenses.reduce((sum, item) => sum + (item.amount + (item.taxAmount || 0)), 0));
@@ -92,7 +96,11 @@ const Dashboard: React.FC = () => {
             d.setDate(endDate.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
             
-            const daySales = allClosings.filter(c => c.date === dateStr).reduce((sum, c) => sum + (c.grossSales || c.totalSystem || 0), 0);
+            // تم تغيير الحساب ليعتمد على "صافي الدخل" لليوم
+            const daySales = allClosings
+              .filter(c => c.date === dateStr)
+              .reduce((sum, c) => sum + ((c.totalSystem || 0) - (c.tips || 0)), 0);
+              
             const dayPurchasesOnly = allPurchases.filter(p => p.date === dateStr).reduce((sum, p) => sum + p.amount, 0);
             const dayExpensesOnly = allExpenses.filter(e => e.date === dateStr).reduce((sum, e) => sum + (e.amount + (e.taxAmount || 0)), 0);
             
@@ -120,7 +128,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {hasFeature('dashboard', 'showTotalSales') && <StatCard title="إجمالي المبيعات" value={`${stats.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="blue" trend="المبيعات (Gross)" />}
+        {hasFeature('dashboard', 'showTotalSales') && <StatCard title="إجمالي المبيعات (صافي الدخل)" value={`${stats.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="blue" trend="بعد خصم المكافآت والضريبة" />}
         {hasFeature('dashboard', 'showTotalCash') && <StatCard title="إجمالي الكاش (الفعلي)" value={`${stats.totalCashSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={Banknote} color="green" trend="النقد في الصندوق" />}
         {hasFeature('dashboard', 'showTotalPurchases') && <StatCard title="إجمالي المشتريات" value={`${stats.totalPurchases.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ShoppingCart} color="orange" trend="فواتير الموردين" />}
         {hasFeature('dashboard', 'showTotalOutgoings') && <StatCard title="إجمالي المصروفات والمشتريات" value={`${stats.totalOutgoings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} color="red" trend="المشتريات + المصاريف العامة" />}
@@ -129,7 +137,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {hasFeature('dashboard', 'showSalesChart') && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                <h3 className="text-lg font-bold mb-4 text-slate-700">حركة المبيعات والتدفقات الخارجة</h3>
+                <h3 className="text-lg font-bold mb-4 text-slate-700">حركة المبيعات (صافي الدخل) والتدفقات الخارجة</h3>
                 <div className="h-[320px] w-full" dir="ltr">
                     <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
@@ -137,7 +145,7 @@ const Dashboard: React.FC = () => {
                         <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f8fafc' }} formatter={(value: number) => numberFormatter(value)} />
-                        <Bar dataKey="sales" name="المبيعات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="sales" name="صافي المبيعات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="outgoings" name="المشتريات والمصاريف" fill="#ef4444" radius={[4, 4, 0, 0]} />
                     </BarChart>
                     </ResponsiveContainer>
