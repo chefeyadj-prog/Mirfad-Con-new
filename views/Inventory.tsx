@@ -332,7 +332,133 @@ const Inventory: React.FC = () => {
           </tbody>
         </table>
       </div>
-      {/* ... rest of component ... */}
+      {/* Add/Edit Product Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Package size={20} className="text-blue-600" />
+                        {editingProductId ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد'}
+                    </h3>
+                    <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-red-500"><X size={20} /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">اسم المنتج <span className="text-red-500">*</span></label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-600"
+                            value={newProduct.name}
+                            onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                            placeholder="مثال: آيفون 15 برو"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">رمز المنتج (SKU) <span className="text-red-500">*</span></label>
+                            <input 
+                                type="text" 
+                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-600 font-mono"
+                                value={newProduct.sku}
+                                onChange={(e) => setNewProduct({...newProduct, sku: e.target.value})}
+                                placeholder="PROD-001"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">التصنيف</label>
+                            <input 
+                                type="text" 
+                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-600"
+                                value={newProduct.category}
+                                onChange={(e) => setNewProduct({...newProduct, category: e.target.value})}
+                                placeholder="عام"
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">الكمية</label>
+                            <input 
+                                type="number" 
+                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-600"
+                                value={newProduct.quantity}
+                                onChange={(e) => setNewProduct({...newProduct, quantity: Number(e.target.value)})}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">سعر التكلفة</label>
+                            <input 
+                                type="number" 
+                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-600"
+                                value={newProduct.cost}
+                                onChange={(e) => setNewProduct({...newProduct, cost: Number(e.target.value)})}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                    <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">إلغاء</button>
+                    <button onClick={handleSaveProduct} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-md transition-colors">
+                        <Save size={18} />
+                        <span>{editingProductId ? 'حفظ التعديلات' : 'حفظ المنتج'}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-slate-800">تأكيد {isBulkDelete ? 'الحذف الجماعي' : 'حذف المنتج'}</h3>
+                <button onClick={() => setIsDeleteModalOpen(false)} className="text-slate-400 hover:text-red-500">
+                    <X size={20} />
+                </button>
+            </div>
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                <AlertTriangle size={24} />
+              </div>
+              <p className="text-slate-500 text-sm mb-6">
+                {isBulkDelete 
+                  ? `هل أنت متأكد من حذف ${selectedProductIds.length} من المنتجات المحددة؟ لا يمكن التراجع عن هذا الإجراء.` 
+                  : "هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء."
+                }
+              </p>
+              
+              <div className="mb-4 text-right">
+                <label className="block text-xs font-bold text-slate-700 mb-1">كلمة المرور</label>
+                <input 
+                  type="password" 
+                  className={`w-full p-2 border rounded-lg text-center font-mono outline-none bg-white text-slate-600 ${deleteError ? 'border-red-500 bg-red-50' : 'border-slate-300 focus:border-indigo-500'}`}
+                  placeholder="****"
+                  autoFocus
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                />
+                {deleteError && <p className="text-xs text-red-500 mt-1">{deleteError}</p>}
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="flex-1 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-bold shadow-lg shadow-red-200 transition-colors"
+                >
+                  {isBulkDelete ? 'حذف الجميع' : 'حذف نهائي'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
