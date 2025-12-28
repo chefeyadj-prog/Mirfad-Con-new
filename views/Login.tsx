@@ -91,9 +91,6 @@ const Login: React.FC = () => {
 
           <div className="mt-6 text-center text-xs text-slate-400 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-100" dir="ltr">
             <p className="font-bold text-slate-600 mb-2 font-cairo"> تواصل مع المسؤول </p>
-           // <p>Admin: <span className="font-mono text-slate-600">Ahmed@Mirfad.com</span></p>
-           // <p>Admin: <span className="font-mono text-slate-600">Kamal@Mirfad.com</span></p>
-           // <p>Admin: <span className="font-mono text-slate-600">Majed@Mirfad.com</span></p>
           </div>
         </div>
       </div>
