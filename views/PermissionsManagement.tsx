@@ -6,7 +6,8 @@ import {
     Plus, AlertCircle, Key, UserPlus, ShieldPlus, LayoutDashboard, 
     ShoppingCart, Server, ShoppingBag, Package, Wallet, PieChart, 
     Users, Banknote, History, FileText, Database, ShieldCheck as AuditIcon, 
-    Sparkles, UserRoundCog, ChevronLeft, ToggleRight, ToggleLeft
+    Sparkles, UserRoundCog, ChevronLeft, ToggleRight, ToggleLeft,
+    AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { logAction } from '../services/auditLogService';
@@ -93,7 +94,6 @@ const PermissionsManagement: React.FC = () => {
     });
 
     const [isLoading, setIsLoading] = useState(true);
-    const [isSeeding, setIsSeeding] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
     
@@ -105,11 +105,14 @@ const PermissionsManagement: React.FC = () => {
     const [isAddRoleModalOpen, setIsAddRoleModalOpen] = useState(false);
     const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
     const [isChangeRoleModalOpen, setIsChangeRoleModalOpen] = useState(false);
+    const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
     
     const [newUser, setNewUser] = useState({ full_name: '', email: '', role: 'cashier', password: '' });
     const [newRoleName, setNewRoleName] = useState('');
     const [passwordData, setPasswordData] = useState({ userId: '', userName: '', newPassword: '' });
     const [roleUpdateData, setRoleUpdateData] = useState({ userId: '', userName: '', currentRole: '', newRole: '' });
+    const [deleteUserData, setDeleteUserData] = useState({ userId: '', userName: '', confirmPassword: '' });
+    const [modalError, setModalError] = useState('');
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -144,36 +147,51 @@ const PermissionsManagement: React.FC = () => {
             setNewUser({ full_name: '', email: '', role: 'cashier', password: '' });
             fetchData();
             setMessage({ text: 'تمت إضافة المستخدم بنجاح', type: 'success' });
+            setTimeout(() => setMessage(null), 3000);
         } catch (err) {} finally { setIsLoading(false); }
     };
 
     const handleUpdatePassword = async () => {
         if (!passwordData.newPassword) return;
+        setIsLoading(true);
         try {
             await supabase.from('user_profiles').update({ password: passwordData.newPassword }).eq('id', passwordData.userId);
             await logAction(currentUser, 'update', 'المستخدمين', `تغيير كلمة مرور: ${passwordData.userName}`);
             setIsChangePasswordModalOpen(false);
             fetchData();
             setMessage({ text: 'تم تحديث كلمة المرور', type: 'success' });
-        } catch (err) {}
+            setTimeout(() => setMessage(null), 3000);
+        } catch (err) {} finally { setIsLoading(false); }
     };
 
     const handleUpdateRole = async () => {
         if (!roleUpdateData.newRole) return;
+        setIsLoading(true);
         try {
             await supabase.from('user_profiles').update({ role: roleUpdateData.newRole }).eq('id', roleUpdateData.userId);
             await logAction(currentUser, 'update', 'المستخدمين', `تغيير رتبة: ${roleUpdateData.userName}`);
             setIsChangeRoleModalOpen(false);
             fetchData();
             setMessage({ text: 'تم تحديث الرتبة بنجاح', type: 'success' });
-        } catch (err) {}
+            setTimeout(() => setMessage(null), 3000);
+        } catch (err) {} finally { setIsLoading(false); }
     };
 
-    const handleDeleteUser = async (id: string, name: string) => {
-        if (!window.confirm(`هل أنت متأكد من حذف المستخدم ${name}؟`)) return;
-        await supabase.from('user_profiles').delete().eq('id', id);
-        setUsers(users.filter(u => u.id !== id));
-        setMessage({ text: 'تم حذف المستخدم', type: 'success' });
+    const handleDeleteUser = async () => {
+        if (deleteUserData.confirmPassword !== '1234') {
+            setModalError('كلمة مرور التأكيد غير صحيحة');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await supabase.from('user_profiles').delete().eq('id', deleteUserData.userId);
+            await logAction(currentUser, 'delete', 'المستخدمين', `حذف المستخدم: ${deleteUserData.userName}`);
+            setUsers(users.filter(u => u.id !== deleteUserData.userId));
+            setIsDeleteUserModalOpen(false);
+            setMessage({ text: 'تم حذف المستخدم بنجاح', type: 'success' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (err) {} finally { setIsLoading(false); }
     };
 
     const openRolePermissions = async (roleKey: string) => {
@@ -204,6 +222,7 @@ const PermissionsManagement: React.FC = () => {
             }, { onConflict: 'role' });
             setIsRoleModalOpen(false);
             setMessage({ text: 'تم حفظ الصلاحيات بنجاح', type: 'success' });
+            setTimeout(() => setMessage(null), 3000);
         } catch (err) {} finally { setIsLoading(false); }
     };
 
@@ -221,10 +240,10 @@ const PermissionsManagement: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={() => setIsAddUserModalOpen(true)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
+                    <button onClick={() => setIsAddUserModalOpen(true)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all text-sm">
                         <UserPlus size={18} /> إضافة مستخدم
                     </button>
-                    <button onClick={() => setIsAddRoleModalOpen(true)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-slate-900 transition-all">
+                    <button onClick={() => setIsAddRoleModalOpen(true)} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-slate-900 transition-all text-sm">
                         <ShieldPlus size={18} /> رتبة جديدة
                     </button>
                 </div>
@@ -279,7 +298,7 @@ const PermissionsManagement: React.FC = () => {
                                             <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                 <button onClick={() => { setRoleUpdateData({ userId: u.id, userName: u.full_name, currentRole: u.role, newRole: u.role }); setIsChangeRoleModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl" title="تغيير الرتبة"><UserRoundCog size={18} /></button>
                                                 <button onClick={() => { setPasswordData({ userId: u.id, userName: u.full_name, newPassword: '' }); setIsChangePasswordModalOpen(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl" title="تغيير كلمة المرور"><Key size={18} /></button>
-                                                <button onClick={() => handleDeleteUser(u.id, u.full_name)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl" title="حذف"><Trash2 size={18} /></button>
+                                                <button onClick={() => { setDeleteUserData({ userId: u.id, userName: u.full_name, confirmPassword: '' }); setModalError(''); setIsDeleteUserModalOpen(true); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl" title="حذف"><Trash2 size={18} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -408,7 +427,7 @@ const PermissionsManagement: React.FC = () => {
                 </div>
             )}
 
-            {/* Simplified Modals for CRUD operations */}
+            {/* Modal: Add User */}
             {isAddUserModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 animate-scale-in">
@@ -424,38 +443,130 @@ const PermissionsManagement: React.FC = () => {
                             </select>
                             <input className="w-full p-3.5 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-slate-50" placeholder="كلمة المرور المؤقتة" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
                         </div>
-                        <button onClick={handleAddUser} className="w-full mt-8 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">تأكيد الإضافة</button>
+                        <button onClick={handleAddUser} disabled={isLoading} className="w-full mt-8 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex justify-center items-center gap-2">
+                             {isLoading ? <Loader2 className="animate-spin" size={20} /> : <UserPlus size={20} />}
+                             تأكيد الإضافة
+                        </button>
                     </div>
                 </div>
             )}
 
-            {isChangeRoleModalOpen && (
+            {/* Modal: Change Password */}
+            {isChangePasswordModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-8 animate-scale-in">
-                        <h3 className="font-black text-xl mb-2">تعديل رتبة الموظف</h3>
-                        <p className="text-slate-500 text-sm font-bold mb-6">{roleUpdateData.userName}</p>
-                        <select className="w-full p-4 border border-slate-200 rounded-2xl mb-8 font-bold bg-white" value={roleUpdateData.newRole} onChange={e => setRoleUpdateData({...roleUpdateData, newRole: e.target.value})}>
-                            {(Object.entries(roles) as [string, any][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                        </select>
-                        <div className="flex gap-3">
-                            <button onClick={() => setIsChangeRoleModalOpen(false)} className="flex-1 py-3 text-slate-400 font-black">إلغاء</button>
-                            <button onClick={handleUpdateRole} className="flex-1 bg-emerald-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-emerald-100">تحديث</button>
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Key size={32} />
+                            </div>
+                            <h3 className="font-black text-xl text-slate-800">تغيير كلمة المرور</h3>
+                            <p className="text-slate-500 text-sm font-bold mt-1">{passwordData.userName}</p>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-black text-slate-500 mb-2 mr-1">كلمة المرور الجديدة</label>
+                                <input 
+                                    type="text"
+                                    className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-center bg-slate-50" 
+                                    placeholder="أدخل كلمة المرور الجديدة" 
+                                    value={passwordData.newPassword} 
+                                    onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => setIsChangePasswordModalOpen(false)} className="flex-1 py-4 text-slate-500 font-black hover:bg-slate-50 rounded-2xl transition-all">إلغاء</button>
+                            <button onClick={handleUpdatePassword} disabled={isLoading || !passwordData.newPassword} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex justify-center items-center gap-2">
+                                {isLoading ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+                                تحديث
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* Modal: Change Role */}
+            {isChangeRoleModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-8 animate-scale-in">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <UserRoundCog size={32} />
+                            </div>
+                            <h3 className="font-black text-xl text-slate-800">تعديل رتبة الموظف</h3>
+                            <p className="text-slate-500 text-sm font-bold mt-1">{roleUpdateData.userName}</p>
+                        </div>
+                        <select className="w-full p-4 border border-slate-200 rounded-2xl mb-8 font-bold bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={roleUpdateData.newRole} onChange={e => setRoleUpdateData({...roleUpdateData, newRole: e.target.value})}>
+                            {(Object.entries(roles) as [string, any][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                        <div className="flex gap-3">
+                            <button onClick={() => setIsChangeRoleModalOpen(false)} className="flex-1 py-3 text-slate-400 font-black hover:bg-slate-50 rounded-2xl">إلغاء</button>
+                            <button onClick={handleUpdateRole} disabled={isLoading} className="flex-1 bg-emerald-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-700 flex justify-center items-center gap-2">
+                                {isLoading ? <Loader2 className="animate-spin" size={18} /> : null}
+                                تحديث الرتبة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Delete User Confirmation */}
+            {isDeleteUserModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-8 animate-scale-in border border-red-100">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle size={32} />
+                            </div>
+                            <h3 className="font-black text-xl text-slate-800">حذف الموظف نهائياً</h3>
+                            <p className="text-slate-500 text-sm font-bold mt-1">{deleteUserData.userName}</p>
+                        </div>
+                        <p className="text-xs text-red-500 text-center font-bold mb-6 leading-relaxed">تنبيه: سيتم مسح ملف المستخدم وصلاحياته تماماً من النظام. لا يمكن التراجع عن هذا الإجراء.</p>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-black text-slate-700 mb-2 mr-1">كلمة مرور المدير للتأكيد</label>
+                                <input 
+                                    type="password" 
+                                    className={`w-full p-3.5 border rounded-2xl text-center font-mono text-lg outline-none focus:ring-4 ${modalError ? 'border-red-500 ring-red-50' : 'border-slate-200 focus:border-red-500 ring-red-50'}`}
+                                    placeholder="****"
+                                    autoFocus
+                                    value={deleteUserData.confirmPassword}
+                                    onChange={e => { setDeleteUserData({...deleteUserData, confirmPassword: e.target.value}); setModalError(''); }}
+                                    onKeyDown={e => e.key === 'Enter' && handleDeleteUser()}
+                                />
+                                {modalError && <p className="text-[10px] text-red-500 mt-2 font-black text-center">{modalError}</p>}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => setIsDeleteUserModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black hover:bg-slate-50 rounded-2xl">إلغاء</button>
+                            <button onClick={handleDeleteUser} disabled={isLoading} className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-red-100 hover:bg-red-700 transition-all flex justify-center items-center gap-2">
+                                {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                                حذف نهائي
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Add Role */}
             {isAddRoleModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-8 animate-scale-in">
                         <h3 className="font-black text-xl mb-6">تعريف رتبة جديدة</h3>
-                        <input className="w-full p-4 border border-slate-200 rounded-2xl mb-8 font-black" placeholder="اسم الرتبة (مثلاً: مشرف)" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} />
-                        <button onClick={() => {
-                            const key = newRoleName.toLowerCase().replace(/\s+/g, '_');
-                            setRoles(prev => ({ ...prev, [key]: { label: newRoleName, color: 'bg-slate-50', icon: Settings2 }}));
-                            setIsAddRoleModalOpen(false);
-                            openRolePermissions(key);
-                        }} className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black shadow-xl">إنشاء وبرمجة الصلاحيات</button>
+                        <input className="w-full p-4 border border-slate-200 rounded-2xl mb-8 font-black focus:ring-2 focus:ring-slate-800 outline-none" placeholder="اسم الرتبة (مثلاً: مشرف)" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} autoFocus />
+                        <div className="flex gap-3">
+                             <button onClick={() => setIsAddRoleModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black hover:bg-slate-50 rounded-2xl">إلغاء</button>
+                             <button onClick={() => {
+                                if (!newRoleName.trim()) return;
+                                const key = newRoleName.toLowerCase().replace(/\s+/g, '_');
+                                setRoles(prev => ({ ...prev, [key]: { label: newRoleName, color: 'bg-slate-50 text-slate-600 border-slate-200', icon: Settings2 }}));
+                                setIsAddRoleModalOpen(false);
+                                openRolePermissions(key);
+                             }} className="flex-[2] bg-slate-800 text-white py-4 rounded-2xl font-black shadow-xl hover:bg-slate-900">إنشاء وبرمجة الصلاحيات</button>
+                        </div>
                     </div>
                 </div>
             )}
