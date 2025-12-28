@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowRight,
@@ -14,6 +15,8 @@ import {
   Download,
   X,
   FileImage,
+  Search,
+  Package,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { analyzeInvoiceImage, ImageDataInput } from '../services/geminiService';
@@ -35,6 +38,11 @@ const CreatePurchase: React.FC = () => {
   const [inventoryProducts, setInventoryProducts] = useState<Product[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
 
+  // Suggestion State
+  const [activeSuggestionRow, setActiveSuggestionRow] = useState<string | null>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const suggestionRef = useRef<HTMLDivElement>(null);
+
   // =============== A LOGIC: truly-unique IDs ===============
   const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -51,6 +59,14 @@ const CreatePurchase: React.FC = () => {
       if (purData) setPurchases(purData);
     };
     fetchData();
+
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+        setActiveSuggestionRow(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
@@ -168,6 +184,16 @@ const CreatePurchase: React.FC = () => {
 
         const newItem: InvoiceItem = { ...item, [field]: processedValue } as InvoiceItem;
 
+        // Auto-show suggestions and reset highlight index
+        if (field === 'description') {
+            if (String(value).length > 0) {
+              setActiveSuggestionRow(id);
+              setHighlightIndex(0);
+            } else {
+              setActiveSuggestionRow(null);
+            }
+        }
+
         if (field === 'code') {
           const code = String(processedValue).trim().toLowerCase();
           const product = inventoryProducts.find((p) => p.sku.toLowerCase() === code);
@@ -180,6 +206,19 @@ const CreatePurchase: React.FC = () => {
         return newItem;
       });
     });
+  };
+
+  const selectProductSuggestion = (rowId: string, product: Product) => {
+      setItems(prev => prev.map(item => {
+          if (item.id !== rowId) return item;
+          return {
+              ...item,
+              description: product.name,
+              code: product.sku,
+              unitPrice: product.cost
+          };
+      }));
+      setActiveSuggestionRow(null);
   };
 
   const handleAttachClick = () => fileInputRef.current?.click();
@@ -403,7 +442,7 @@ const CreatePurchase: React.FC = () => {
                   quantity: item.quantity,
                   cost: item.unitPrice,
                   price: round(item.unitPrice * 1.3),
-                  category: 'عام',
+                  category: 'مشتريات',
                   createdAt: new Date().toISOString(),
                 });
               }
@@ -427,7 +466,6 @@ const CreatePurchase: React.FC = () => {
     }
   };
 
-  // ======================= UI (B) kept as-is =======================
   return (
     <div className="max-w-5xl mx-auto pb-12">
       <div className="flex items-center justify-between mb-8">
@@ -451,6 +489,7 @@ const CreatePurchase: React.FC = () => {
         </div>
       </div>
 
+      {/* Attachments Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 p-6">
           <div className="flex justify-between items-start mb-4">
@@ -542,6 +581,7 @@ const CreatePurchase: React.FC = () => {
         </div>
       </div>
 
+      {/* Invoice Data Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
         <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-2">بيانات الفاتورة الأساسية</h3>
 
@@ -657,6 +697,7 @@ const CreatePurchase: React.FC = () => {
         </div>
       </div>
 
+      {/* Items Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
           <h3 className="font-bold text-slate-800">الأصناف</h3>
@@ -668,121 +709,193 @@ const CreatePurchase: React.FC = () => {
           </button>
         </div>
 
-        <table className="w-full text-right">
-          <thead className="bg-white text-slate-500 text-sm border-b border-slate-100">
-            <tr>
-              <th className="p-4 w-12">#</th>
-              <th className="p-4 w-32">كود الصنف</th>
-              <th className="p-4">اسم الصنف / الوصف</th>
-              <th className="p-4 w-24">الكمية</th>
-              <th className="p-4 w-32">سعر الوحدة</th>
-              <th className="p-4 w-32">الإجمالي</th>
-              <th className="p-4 w-12"></th>
-            </tr>
-          </thead>
+        <div className="overflow-visible">
+            <table className="w-full text-right border-collapse">
+            <thead className="bg-white text-slate-500 text-sm border-b border-slate-100">
+                <tr>
+                <th className="p-4 w-12">#</th>
+                <th className="p-4 w-32">كود الصنف</th>
+                <th className="p-4 min-w-[250px]">اسم الصنف / الوصف</th>
+                <th className="p-4 w-24">الكمية</th>
+                <th className="p-4 w-32">سعر الوحدة</th>
+                <th className="p-4 w-32">الإجمالي</th>
+                <th className="p-4 w-12"></th>
+                </tr>
+            </thead>
 
-          <tbody className="divide-y divide-slate-100">
-            {items.map((item, index) => (
-              <tr key={item.id} className="hover:bg-slate-50">
-                <td className="p-4 text-slate-400 text-sm">{index + 1}</td>
+            <tbody className="divide-y divide-slate-100">
+                {items.map((item, index) => {
+                  // Filter suggestions based on typed description
+                  const filteredSuggestions = inventoryProducts.filter(p => {
+                      if (!item.description) return false;
+                      const term = item.description.toLowerCase();
+                      return p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term);
+                  }).slice(0, 5); // Limit suggestions to 5 items
 
-                <td className="p-4">
-                  <input
-                    type="text"
-                    className="w-full p-1 border border-slate-200 rounded focus:border-indigo-500 outline-none text-sm"
-                    value={item.code}
-                    onChange={(e) => updateItem(item.id, 'code', e.target.value)}
-                    placeholder="SKU"
-                  />
+                  // Keyboard Navigation Handler
+                  const handleKeyDown = (e: React.KeyboardEvent) => {
+                    if (activeSuggestionRow !== item.id || filteredSuggestions.length === 0) return;
+
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHighlightIndex(prev => (prev < filteredSuggestions.length - 1 ? prev + 1 : prev));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightIndex(prev => (prev > 0 ? prev - 1 : prev));
+                    } else if (e.key === 'Enter') {
+                      if (highlightIndex >= 0 && highlightIndex < filteredSuggestions.length) {
+                        e.preventDefault();
+                        selectProductSuggestion(item.id, filteredSuggestions[highlightIndex]);
+                      }
+                    } else if (e.key === 'Escape') {
+                      setActiveSuggestionRow(null);
+                    }
+                  };
+
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 text-slate-400 text-sm">{index + 1}</td>
+
+                        <td className="p-4">
+                        <input
+                            type="text"
+                            className="w-full p-2 border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm font-mono"
+                            value={item.code}
+                            onChange={(e) => updateItem(item.id, 'code', e.target.value)}
+                            placeholder="SKU"
+                        />
+                        </td>
+
+                        <td className="p-4 relative">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm"
+                                    value={item.description}
+                                    onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                                    onFocus={() => {
+                                      if (item.description) {
+                                        setActiveSuggestionRow(item.id);
+                                        setHighlightIndex(0);
+                                      }
+                                    }}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="ابدأ بكتابة اسم المنتج من المخزون..."
+                                />
+                                <Search size={14} className="absolute left-2 top-2.5 text-slate-400" />
+                            </div>
+
+                            {/* Autocomplete Dropdown */}
+                            {activeSuggestionRow === item.id && filteredSuggestions.length > 0 && (
+                                <div 
+                                    ref={suggestionRef}
+                                    className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto animate-fade-in"
+                                >
+                                    <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-400 border-b border-slate-100 uppercase tracking-widest">مقترحات من المخزون</div>
+                                    {filteredSuggestions.map((prod, sIdx) => (
+                                        <div
+                                            key={prod.id}
+                                            onClick={() => selectProductSuggestion(item.id, prod)}
+                                            onMouseEnter={() => setHighlightIndex(sIdx)}
+                                            className={`p-3 cursor-pointer border-b border-slate-50 last:border-0 flex justify-between items-center group transition-colors ${highlightIndex === sIdx ? 'bg-indigo-100' : 'hover:bg-indigo-50'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-1.5 rounded transition-colors ${highlightIndex === sIdx ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600'}`}>
+                                                    <Package size={16} />
+                                                </div>
+                                                <div>
+                                                    <div className={`font-bold text-sm ${highlightIndex === sIdx ? 'text-indigo-900' : 'text-slate-800'}`}>{prod.name}</div>
+                                                    <div className="text-[10px] text-slate-500 font-mono">SKU: {prod.sku}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-left">
+                                                <div className={`text-xs font-bold ${highlightIndex === sIdx ? 'text-indigo-700' : 'text-indigo-600'}`}>{prod.cost.toFixed(2)} ر.س</div>
+                                                <div className="text-[10px] text-slate-400">المخزون: {prod.quantity}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </td>
+
+                        <td className="p-4">
+                        <input
+                            type="number"
+                            className="w-full p-2 border border-slate-200 rounded-lg focus:border-indigo-500 outline-none text-sm text-center font-bold"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
+                            min="1"
+                        />
+                        </td>
+
+                        <td className="p-4">
+                        <input
+                            type="number"
+                            className="w-full p-2 border border-slate-200 rounded-lg focus:border-indigo-500 outline-none text-sm text-center font-mono"
+                            value={item.unitPrice}
+                            onChange={(e) => updateItem(item.id, 'unitPrice', e.target.value)}
+                            min="0"
+                            step="0.01"
+                        />
+                        </td>
+
+                        <td className="p-4 font-bold text-slate-700 font-mono">{calculateRowTotal(item).toFixed(2)}</td>
+
+                        <td className="p-4 text-center">
+                        <button onClick={() => handleRemoveItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                            <Trash2 size={16} />
+                        </button>
+                        </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+
+            <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+                <tr>
+                <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
+                    المجموع الفرعي (Subtotal)
                 </td>
-
-                <td className="p-4">
-                  <input
-                    type="text"
-                    className="w-full p-1 border border-slate-200 rounded focus:border-indigo-500 outline-none text-sm"
-                    value={item.description}
-                    onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                    placeholder="اسم المنتج"
-                  />
+                <td colSpan={2} className="p-4 font-bold text-slate-800 text-lg font-mono">
+                    {subTotal.toFixed(2)}
                 </td>
+                </tr>
 
-                <td className="p-4">
-                  {/* Keep UI like B (number input), but pass raw string to A updateItem sanitizer */}
-                  <input
+                <tr>
+                <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
+                    الخصم (Discount)
+                </td>
+                <td colSpan={2} className="p-4">
+                    <input
                     type="number"
-                    className="w-full p-1 border border-slate-200 rounded focus:border-indigo-500 outline-none text-sm text-center"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                    min="1"
-                  />
+                    className="w-32 p-2 border border-slate-300 rounded-lg bg-white text-slate-800 font-bold outline-none focus:ring-2 focus:ring-indigo-500 text-center font-mono"
+                    value={discountAmount === 0 ? '' : discountAmount}
+                    onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value)))}
+                    placeholder="0.00"
+                    />
                 </td>
+                </tr>
 
-                <td className="p-4">
-                  <input
-                    type="number"
-                    className="w-full p-1 border border-slate-200 rounded focus:border-indigo-500 outline-none text-sm text-center"
-                    value={item.unitPrice}
-                    onChange={(e) => updateItem(item.id, 'unitPrice', e.target.value)}
-                    min="0"
-                    step="0.01"
-                  />
+                <tr>
+                <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
+                    ضريبة القيمة المضافة (15%)
                 </td>
-
-                <td className="p-4 font-bold text-slate-700">{calculateRowTotal(item).toFixed(2)}</td>
-
-                <td className="p-4 text-center">
-                  <button onClick={() => handleRemoveItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                    <Trash2 size={16} />
-                  </button>
+                <td colSpan={2} className="p-4 font-bold text-slate-600 font-mono">
+                    {vatTotal.toFixed(2)}
                 </td>
-              </tr>
-            ))}
-          </tbody>
+                </tr>
 
-          <tfoot className="bg-slate-50 border-t-2 border-slate-100">
-            <tr>
-              <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
-                المجموع الفرعي (Subtotal)
-              </td>
-              <td colSpan={2} className="p-4 font-bold text-slate-800 text-lg">
-                {subTotal.toFixed(2)}
-              </td>
-            </tr>
-
-            <tr>
-              <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
-                الخصم (Discount)
-              </td>
-              <td colSpan={2} className="p-4">
-                <input
-                  type="number"
-                  className="w-32 p-1 border border-slate-300 rounded bg-white text-slate-800 font-bold outline-none focus:ring-2 focus:ring-indigo-500 text-center font-mono"
-                  value={discountAmount === 0 ? '' : discountAmount}
-                  onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value)))}
-                  placeholder="0.00"
-                />
-              </td>
-            </tr>
-
-            <tr>
-              <td colSpan={5} className="p-4 text-left font-bold text-slate-600 border-l border-slate-100">
-                ضريبة القيمة المضافة (15%)
-              </td>
-              <td colSpan={2} className="p-4 font-bold text-slate-600">
-                {vatTotal.toFixed(2)}
-              </td>
-            </tr>
-
-            <tr className="bg-indigo-50">
-              <td colSpan={5} className="p-4 text-left font-bold text-indigo-900 border-l border-indigo-100">
-                الإجمالي النهائي (Grand Total)
-              </td>
-              <td colSpan={2} className="p-4 font-bold text-indigo-700 text-xl font-mono">
-                {grandTotal.toFixed(2)} <span className="text-sm font-normal">{currency}</span>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+                <tr className="bg-indigo-50">
+                <td colSpan={5} className="p-4 text-left font-bold text-indigo-900 border-l border-indigo-100 text-lg">
+                    الإجمالي النهائي (Grand Total)
+                </td>
+                <td colSpan={2} className="p-4 font-bold text-indigo-700 text-2xl font-mono">
+                    {grandTotal.toFixed(2)} <span className="text-sm font-normal">{currency}</span>
+                </td>
+                </tr>
+            </tfoot>
+            </table>
+        </div>
       </div>
     </div>
   );
