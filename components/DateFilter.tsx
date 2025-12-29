@@ -10,11 +10,15 @@ export type DateRange = {
 
 export const getThisMonthRange = (): DateRange => {
   const today = new Date();
+  // أول يوم في الشهر الحالي
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   startOfMonth.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
-  return { label: 'هذا الشهر', start: startOfMonth, end: endOfDay };
+  
+  // آخر يوم في الشهر الحالي (عن طريق الوصول لليوم 0 من الشهر القادم)
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  endOfMonth.setHours(23, 59, 59, 999);
+  
+  return { label: 'هذا الشهر', start: startOfMonth, end: endOfMonth };
 };
 
 interface DateFilterProps {
