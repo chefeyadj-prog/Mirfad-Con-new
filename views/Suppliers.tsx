@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Phone, Building, Plus, X, Save, AlertCircle, FileText, Hash, Edit, Trash2, AlertTriangle, Banknote, CreditCard, Loader2, CheckCircle2 } from 'lucide-react';
+import { Phone, Building, Plus, X, Save, AlertCircle, FileText, Hash, Edit, Trash2, AlertTriangle, Banknote, CreditCard, Loader2, CheckCircle2, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Supplier } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -14,7 +14,6 @@ const Suppliers: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchSuppliers = async () => {
-    // الترتيب حسب الرصيد تنازلياً (الأعلى أولاً) ثم حسب الاسم للحالات المتساوية
     const { data } = await supabase
       .from('suppliers')
       .select('*')
@@ -31,6 +30,9 @@ const Suppliers: React.FC = () => {
         .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Filter only suppliers with balance > 0 for printing
+  const debtorSuppliers = suppliers.filter(s => s.balance > 0);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,7 +131,6 @@ const Suppliers: React.FC = () => {
     setIsLoading(true);
     
     try {
-        // 1. تحديث كافة فواتير المشتريات الآجلة لهذا المورد
         const { error: purError } = await supabase
             .from('purchases')
             .update({ paymentMethod: paymentMethod })
@@ -138,7 +139,6 @@ const Suppliers: React.FC = () => {
 
         if (purError) throw purError;
 
-        // 2. تصفير رصيد المورد
         const { error: supError } = await supabase
             .from('suppliers')
             .update({ balance: 0 })
@@ -187,30 +187,49 @@ const Suppliers: React.FC = () => {
       }
   };
 
+  const handlePrintDebtorCards = () => {
+    if (debtorSuppliers.length === 0) {
+      alert("لا يوجد موردين لديهم مديونية حالياً.");
+      return;
+    }
+    window.print();
+  };
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="suppliers-container relative">
+      {/* Main UI Header */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 print:hidden">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">قائمة الموردين</h2>
           <p className="text-sm text-slate-500 mt-1">إدارة الحسابات والأرصدة المستحقة للموردين</p>
         </div>
-        <button 
-            onClick={openAddModal}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-        >
-            <Plus size={18} />
-            <span>إضافة مورد جديد</span>
-        </button>
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={handlePrintDebtorCards}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm font-bold text-sm"
+            >
+                <Printer size={18} />
+                <span>طباعة بطاقات المديونية ({debtorSuppliers.length})</span>
+            </button>
+            <button 
+                onClick={openAddModal}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm font-bold text-sm"
+            >
+                <Plus size={18} />
+                <span>إضافة مورد جديد</span>
+            </button>
+        </div>
       </div>
 
       {successMsg && (
-        <div className="mb-6 bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+        <div className="mb-6 bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in print:hidden">
            <CheckCircle2 size={24} />
            <p className="font-bold">{successMsg}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Main Grid View */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:hidden">
         {suppliers.map((supplier) => (
             <div key={supplier.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                 <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[10px] px-2 py-1 rounded-br-lg font-mono z-10 tracking-widest">
@@ -270,9 +289,61 @@ const Suppliers: React.FC = () => {
         )}
       </div>
 
+      {/* Print-Only Section: Debtor Cards */}
+      <div className="hidden print:block w-full">
+         <div className="text-center mb-10 border-b-4 border-slate-800 pb-4">
+             <h1 className="text-2xl font-black text-slate-900 mb-2">تقرير مديونية الموردين</h1>
+             <p className="text-sm font-bold text-slate-600">نظام مِرفاد المحاسبي - بتاريخ: {new Date().toLocaleDateString('ar-SA')}</p>
+         </div>
+         
+         <div className="grid grid-cols-2 gap-4">
+            {debtorSuppliers.map(s => (
+                <div key={s.id} className="border-2 border-slate-200 rounded-2xl p-6 bg-white break-inside-avoid shadow-sm">
+                    <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                        <div>
+                            <h3 className="font-black text-lg text-slate-900 leading-tight">{s.name}</h3>
+                            <p className="text-[10px] text-slate-400 font-mono mt-1">CODE: {s.code || 'N/A'}</p>
+                        </div>
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <Building size={20} />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500">الرصيد المستحق:</span>
+                            <span className="text-xl font-black text-red-700 font-mono">
+                                {s.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">ر.س</span>
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500">رقم الهاتف:</span>
+                            <span className="text-xs font-bold text-slate-700 font-mono">{s.phone || '---'}</span>
+                        </div>
+                        {s.taxNumber && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-slate-500">الرقم الضريبي:</span>
+                                <span className="text-[10px] font-bold text-slate-600 font-mono">{s.taxNumber}</span>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="mt-4 pt-3 border-t border-dashed border-slate-200 text-center">
+                         <div className="w-16 h-8 border border-slate-300 rounded mx-auto opacity-30"></div>
+                         <p className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Mirfad Accounting</p>
+                    </div>
+                </div>
+            ))}
+         </div>
+         
+         <div className="mt-12 text-center border-t border-slate-100 pt-6">
+             <p className="text-[10px] text-slate-400 font-bold">تم استخراج هذا التقرير آلياً بواسطة نظام مِرفاد لإدارة الموارد • إجمالي المديونية في هذه الصفحة: {debtorSuppliers.reduce((sum, s) => sum + s.balance, 0).toLocaleString()} ر.س</p>
+         </div>
+      </div>
+
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-slate-800">{editingId ? 'تعديل بيانات المورد' : 'إضافة مورد جديد'}</h3>
@@ -316,7 +387,7 @@ const Suppliers: React.FC = () => {
 
       {/* Pay Dues Modal */}
       {isPayModalOpen && selectedSupplier && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
                 <div className="p-6 text-center">
                     <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -378,7 +449,7 @@ const Suppliers: React.FC = () => {
 
       {/* Delete Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm print:hidden">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={24} /></div>
@@ -397,6 +468,30 @@ const Suppliers: React.FC = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .suppliers-container, .suppliers-container * {
+            visibility: visible;
+          }
+          .print-hidden {
+            display: none !important;
+          }
+          .suppliers-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          @page {
+            size: A4;
+            margin: 1cm;
+          }
+        }
+      `}</style>
     </div>
   );
 };
