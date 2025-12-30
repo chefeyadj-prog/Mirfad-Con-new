@@ -289,55 +289,50 @@ const Suppliers: React.FC = () => {
         )}
       </div>
 
-      {/* Print-Only Section: Debtor Cards */}
+      {/* Print-Only Section: Debtor Cards - Compact Mode */}
       <div className="hidden print:block w-full">
-         <div className="text-center mb-10 border-b-4 border-slate-800 pb-4">
-             <h1 className="text-2xl font-black text-slate-900 mb-2">تقرير مديونية الموردين</h1>
-             <p className="text-sm font-bold text-slate-600">نظام مِرفاد المحاسبي - بتاريخ: {new Date().toLocaleDateString('ar-SA')}</p>
+         <div className="text-center mb-6 border-b-2 border-slate-800 pb-2">
+             <h1 className="text-xl font-black text-slate-900">تقرير مديونية الموردين</h1>
+             <p className="text-[10px] font-bold text-slate-600">نظام مِرفاد المحاسبي - {new Date().toLocaleDateString('ar-SA')}</p>
          </div>
          
-         <div className="grid grid-cols-2 gap-4">
+         <div className="grid grid-cols-3 gap-2">
             {debtorSuppliers.map(s => (
-                <div key={s.id} className="border-2 border-slate-200 rounded-2xl p-6 bg-white break-inside-avoid shadow-sm">
-                    <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                <div key={s.id} className="border border-slate-300 rounded-xl p-3 bg-white break-inside-avoid shadow-none">
+                    <div className="flex justify-between items-start mb-2 border-b border-slate-100 pb-1">
                         <div>
-                            <h3 className="font-black text-lg text-slate-900 leading-tight">{s.name}</h3>
-                            <p className="text-[10px] text-slate-400 font-mono mt-1">CODE: {s.code || 'N/A'}</p>
+                            <h3 className="font-black text-xs text-slate-900 leading-tight truncate max-w-[120px]">{s.name}</h3>
+                            <p className="text-[8px] text-slate-400 font-mono mt-0.5">#{s.code || 'N/A'}</p>
                         </div>
-                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                            <Building size={20} />
+                        <div className="p-1 bg-indigo-50 text-indigo-600 rounded">
+                            <Building size={12} />
                         </div>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-1.5">
                         <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-500">الرصيد المستحق:</span>
-                            <span className="text-xl font-black text-red-700 font-mono">
-                                {s.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">ر.س</span>
+                            <span className="text-[9px] font-bold text-slate-500">المستحق:</span>
+                            <span className="text-xs font-black text-red-700 font-mono">
+                                {s.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-500">رقم الهاتف:</span>
-                            <span className="text-xs font-bold text-slate-700 font-mono">{s.phone || '---'}</span>
+                            <span className="text-[9px] font-bold text-slate-500">الهاتف:</span>
+                            <span className="text-[9px] font-bold text-slate-700 font-mono">{s.phone || '---'}</span>
                         </div>
                         {s.taxNumber && (
                             <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold text-slate-500">الرقم الضريبي:</span>
-                                <span className="text-[10px] font-bold text-slate-600 font-mono">{s.taxNumber}</span>
+                                <span className="text-[9px] font-bold text-slate-500">الضريبي:</span>
+                                <span className="text-[8px] font-bold text-slate-600 font-mono">{s.taxNumber}</span>
                             </div>
                         )}
-                    </div>
-                    
-                    <div className="mt-4 pt-3 border-t border-dashed border-slate-200 text-center">
-                         <div className="w-16 h-8 border border-slate-300 rounded mx-auto opacity-30"></div>
-                         <p className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Mirfad Accounting</p>
                     </div>
                 </div>
             ))}
          </div>
          
-         <div className="mt-12 text-center border-t border-slate-100 pt-6">
-             <p className="text-[10px] text-slate-400 font-bold">تم استخراج هذا التقرير آلياً بواسطة نظام مِرفاد لإدارة الموارد • إجمالي المديونية في هذه الصفحة: {debtorSuppliers.reduce((sum, s) => sum + s.balance, 0).toLocaleString()} ر.س</p>
+         <div className="mt-8 text-center border-t border-slate-100 pt-4">
+             <p className="text-[8px] text-slate-400 font-bold">إجمالي المديونية: {debtorSuppliers.reduce((sum, s) => sum + s.balance, 0).toLocaleString()} ر.س</p>
          </div>
       </div>
 
@@ -488,7 +483,7 @@ const Suppliers: React.FC = () => {
           }
           @page {
             size: A4;
-            margin: 1cm;
+            margin: 0.5cm;
           }
         }
       `}</style>
