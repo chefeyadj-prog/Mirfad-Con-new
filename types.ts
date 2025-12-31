@@ -91,11 +91,17 @@ export interface Employee {
   name: string;
   role: string;
   phone?: string;
-  salary: number;
+  salary: number; // This will be the Total Salary
+  basicSalary?: number;
+  housingAllowance?: number;
+  transportationAllowance?: number;
   joinDate?: string;
+  paymentMethod?: 'cash' | 'transfer';
+  nationality?: string;
+  dailyHours?: number;
 }
 
-export type SalaryTransactionType = 'loan' | 'deduction' | 'meal' | 'shortage' | 'bonus' | 'salary_payment';
+export type SalaryTransactionType = 'loan' | 'deduction' | 'meal' | 'shortage' | 'bonus' | 'salary_payment' | 'days_worked' | 'extra_days' | 'extra_hours' | 'leave_days';
 
 export interface SalaryTransaction {
   id: string;
