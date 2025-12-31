@@ -7,7 +7,8 @@ import {
     ShoppingCart, Server, ShoppingBag, Package, Wallet, PieChart, 
     Users, Banknote, History, FileText, Database, ShieldCheck as AuditIcon, 
     Sparkles, UserRoundCog, ChevronLeft, ToggleRight, ToggleLeft,
-    AlertTriangle
+    AlertTriangle,
+    Calendar
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { logAction } from '../services/auditLogService';
@@ -54,6 +55,11 @@ const PERMISSIONS_SCHEMA: Record<string, { label: string, icon: any, features: R
         icon: ShoppingBag, 
         features: { canAdd: 'إضافة فاتورة', canExport: 'Excel', canDelete: 'حذف', canEdit: 'تعديل', canFilter: 'فلتر', canSearch: 'بحث', showList: 'عرض السجل' } 
     },
+    monthly_purchases: {
+        label: 'المشتريات الشهرية',
+        icon: Calendar,
+        features: { canView: 'دخول الصفحة' }
+    },
     inventory: { 
         label: 'المخزون', 
         icon: Package, 
@@ -74,7 +80,7 @@ const PERMISSIONS_SCHEMA: Record<string, { label: string, icon: any, features: R
         icon: Users, 
         features: { canAdd: 'إضافة مورد', canDelete: 'حذف', canEdit: 'تعديل', canPay: 'دفع مستحقات' } 
     },
-    salaries: { label: 'الرواتب', icon: Banknote, features: { canView: 'دخول الصفحة' } },
+    salaries: { label: 'الموارد البشرية والرواتب', icon: UserCog, features: { canView: 'دخول الصفحة' } },
     retroactive: { label: 'الأثر الرجعي', icon: History, features: { canView: 'دخول الصفحة' } },
     reports: { label: 'التقرير الذكي', icon: FileText, features: { canView: 'دخول الصفحة' } },
     backups: { label: 'النسخة الاحتياطية', icon: Database, features: { canView: 'دخول الصفحة' } },
@@ -430,7 +436,7 @@ const PermissionsManagement: React.FC = () => {
             {/* Modal: Add User */}
             {isAddUserModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 animate-scale-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-md p-8 animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-black text-xl text-slate-800">إضافة موظف جديد</h3>
                             <button onClick={() => setIsAddUserModalOpen(false)}><X className="text-slate-400" /></button>
