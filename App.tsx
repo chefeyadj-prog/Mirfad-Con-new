@@ -22,6 +22,7 @@ import Login from './views/Login';
 import AuditLogs from './views/AuditLogs';
 import Retroactive from './views/Retroactive';
 import PermissionsManagement from './views/PermissionsManagement';
+import MonthlyPurchasesReport from './views/MonthlyPurchasesReport';
 import { useAuth } from './context/AuthContext';
 import { usePermissions } from './context/PermissionsContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -161,6 +162,7 @@ const App: React.FC = () => {
               <Route path="/purchases/new" element={<ProtectedRoute permissionKey="purchases"><CreatePurchase /></ProtectedRoute>} />
               <Route path="/purchases/edit/:id" element={<ProtectedRoute permissionKey="purchases"><CreatePurchase /></ProtectedRoute>} />
               <Route path="/purchases/:id" element={<ProtectedRoute permissionKey="purchases"><PurchaseDetails /></ProtectedRoute>} />
+              <Route path="/monthly-purchases" element={<ProtectedRoute permissionKey="monthly_purchases"><MonthlyPurchasesReport /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute permissionKey="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/custody" element={<ProtectedRoute permissionKey="custody"><Custody /></ProtectedRoute>} />
               <Route path="/general-expenses" element={<ProtectedRoute permissionKey="general_expenses"><GeneralExpenses /></ProtectedRoute>} />
