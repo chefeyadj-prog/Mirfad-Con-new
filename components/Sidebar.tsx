@@ -16,7 +16,9 @@ import {
   ShieldCheck,
   History,
   Database,
-  LockKeyhole
+  LockKeyhole,
+  UserCog,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionsContext';
@@ -36,11 +38,12 @@ const Sidebar = () => {
     { to: '/sales', icon: ShoppingCart, label: 'تقفيل المبيعات اليومي', pKey: 'sales' },
     { to: '/terminals', icon: Server, label: 'أجهزة الشبكة', pKey: 'terminals' },
     { to: '/purchases', icon: ShoppingBag, label: 'المشتريات', pKey: 'purchases' },
+    { to: '/monthly-purchases', icon: Calendar, label: 'المشتريات الشهرية', pKey: 'monthly_purchases' },
     { to: '/inventory', icon: Package, label: 'المخزون', pKey: 'inventory' },
     { to: '/custody', icon: Wallet, label: 'العهد المالية', pKey: 'custody' },
     { to: '/general-expenses', icon: PieChart, label: 'المصاريف العامة', pKey: 'general_expenses' },
     { to: '/suppliers', icon: Users, label: 'الموردين', pKey: 'suppliers' },
-    { to: '/salaries', icon: Banknote, label: 'الرواتب', pKey: 'salaries' },
+    { to: '/salaries', icon: UserCog, label: 'الموارد البشرية والرواتب', pKey: 'salaries' },
     { to: '/retroactive', icon: History, label: 'الأثر الرجعي', pKey: 'retroactive' },
     { to: '/reports', icon: FileText, label: 'التقارير الذكية', pKey: 'reports' },
     { to: '/backups', icon: Database, label: 'النسخ الاحتياطية', pKey: 'backups' },
