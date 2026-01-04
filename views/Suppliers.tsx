@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Phone, Building, Plus, X, Save, AlertCircle, FileText, Hash, Edit, Trash2, AlertTriangle, Banknote, CreditCard, Loader2, CheckCircle2, Printer } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Phone, Building, Plus, X, Save, AlertCircle, FileText, Hash, Edit, Trash2, AlertTriangle, Banknote, CreditCard, Loader2, CheckCircle2, Printer, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Supplier } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -12,6 +12,7 @@ const Suppliers: React.FC = () => {
   const { user } = useAuth();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchSuppliers = async () => {
     const { data } = await supabase
@@ -31,8 +32,21 @@ const Suppliers: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Filter only suppliers with balance > 0 for printing
-  const debtorSuppliers = suppliers.filter(s => s.balance > 0);
+  // Filter suppliers based on search term
+  const filteredSuppliers = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return suppliers;
+    
+    return suppliers.filter(s => 
+      s.name.toLowerCase().includes(term) ||
+      (s.phone && s.phone.includes(term)) ||
+      (s.code && s.code.toLowerCase().includes(term)) ||
+      (s.taxNumber && s.taxNumber.includes(term))
+    );
+  }, [suppliers, searchTerm]);
+
+  // Filter only suppliers with balance > 0 for printing (from the filtered list)
+  const debtorSuppliers = filteredSuppliers.filter(s => s.balance > 0);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -198,25 +212,38 @@ const Suppliers: React.FC = () => {
   return (
     <div className="suppliers-container relative">
       {/* Main UI Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 print:hidden">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 print:hidden">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">قائمة الموردين</h2>
           <p className="text-sm text-slate-500 mt-1">إدارة الحسابات والأرصدة المستحقة للموردين</p>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Search Input */}
+        <div className="relative w-full lg:max-w-md">
+            <Search className="absolute right-3 top-2.5 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="بحث باسم المورد، الهاتف، أو الكود..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pr-10 pl-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm font-bold text-slate-700 shadow-sm"
+            />
+        </div>
+
+        <div className="flex items-center gap-2 w-full lg:w-auto">
             <button 
                 onClick={handlePrintDebtorCards}
-                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm font-bold text-sm"
+                className="flex-1 lg:flex-none bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm font-bold text-sm"
             >
                 <Printer size={18} />
-                <span>طباعة بطاقات المديونية ({debtorSuppliers.length})</span>
+                <span>طباعة المديونية</span>
             </button>
             <button 
                 onClick={openAddModal}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm font-bold text-sm"
+                className="flex-1 lg:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm font-bold text-sm"
             >
                 <Plus size={18} />
-                <span>إضافة مورد جديد</span>
+                <span>إضافة مورد</span>
             </button>
         </div>
       </div>
@@ -230,8 +257,8 @@ const Suppliers: React.FC = () => {
 
       {/* Main Grid View */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:hidden">
-        {suppliers.map((supplier) => (
-            <div key={supplier.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+        {filteredSuppliers.map((supplier) => (
+            <div key={supplier.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group animate-fade-in">
                 <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[10px] px-2 py-1 rounded-br-lg font-mono z-10 tracking-widest">
                     {supplier.code || 'NO-CODE'}
                 </div>
@@ -282,14 +309,14 @@ const Suppliers: React.FC = () => {
                 </div>
             </div>
         ))}
-        {suppliers.length === 0 && (
+        {filteredSuppliers.length === 0 && (
             <div className="col-span-full py-12 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                لا يوجد موردين مضافين حالياً
+                {searchTerm ? 'لا توجد نتائج مطابقة للبحث' : 'لا يوجد موردين مضافين حالياً'}
             </div>
         )}
       </div>
 
-      {/* Print-Only Section: Debtor Cards - Compact Mode */}
+      {/* Print-Only Section (Always uses the current filtered debtor list) */}
       <div className="hidden print:block w-full">
          <div className="text-center mb-6 border-b-2 border-slate-800 pb-2">
              <h1 className="text-xl font-black text-slate-900">تقرير مديونية الموردين</h1>
@@ -336,7 +363,7 @@ const Suppliers: React.FC = () => {
          </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Modals remain same ... */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
@@ -348,29 +375,29 @@ const Suppliers: React.FC = () => {
                     {errorMsg && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center gap-2 border border-red-100"><AlertCircle size={16} />{errorMsg}</div>}
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">اسم المورد / الشركة <span className="text-red-500">*</span></label>
-                        <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600" placeholder="اسم المورد" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                        <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600 font-bold" placeholder="اسم المورد" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">كود المورد</label>
-                            <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600" placeholder="مثال: 200" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
+                            <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600 font-bold" placeholder="مثال: 200" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">رقم الهاتف</label>
-                            <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600" placeholder="05xxxxxxxx" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                            <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600 font-bold" placeholder="05xxxxxxxx" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                         </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">الرقم الضريبي</label>
-                        <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600" placeholder="3xxxxxxxxxxxxxx" value={formData.tax} onChange={(e) => setFormData({...formData, tax: e.target.value})} />
+                        <input type="text" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-600 font-bold font-mono" placeholder="3xxxxxxxxxxxxxx" value={formData.tax} onChange={(e) => setFormData({...formData, tax: e.target.value})} />
                     </div>
                 </div>
                 <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                    <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">إلغاء</button>
+                    <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors font-bold">إلغاء</button>
                     <button 
                         onClick={handleSaveSupplier} 
                         disabled={isLoading}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 shadow-md transition-colors disabled:opacity-50"
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 shadow-md transition-colors disabled:opacity-50 font-bold"
                     >
                         {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                         <span>{editingId ? 'حفظ التعديلات' : 'حفظ المورد'}</span>
@@ -434,9 +461,6 @@ const Suppliers: React.FC = () => {
                             <span>تأكيد السداد</span>
                         </button>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-4 leading-relaxed px-4 text-center">
-                        * سيتم تصفية رصيد المورد وتعديل فواتير المشتريات الآجلة المرتبطة به إلى وسيلة الدفع المختارة.
-                    </p>
                 </div>
             </div>
         </div>
@@ -449,14 +473,14 @@ const Suppliers: React.FC = () => {
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={24} /></div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">تأكيد حذف المورد</h3>
-              <p className="text-slate-500 text-sm mb-6">سيتم حذف المورد وسجله بالكامل. لا يمكن التراجع عن هذا الإجراء.</p>
+              <p className="text-slate-500 text-sm mb-6 font-bold">سيتم حذف المورد وسجله بالكامل. لا يمكن التراجع عن هذا الإجراء.</p>
               <div className="mb-4 text-right">
                 <label className="block text-xs font-bold text-slate-700 mb-1">كلمة المرور</label>
                 <input type="password" className={`w-full p-2 border rounded-lg text-center font-mono outline-none bg-white text-slate-600 ${deleteError ? 'border-red-500 bg-red-50' : 'border-slate-300 focus:border-indigo-500'}`} placeholder="****" autoFocus value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirmDelete()} />
                 {deleteError && <p className="text-xs text-red-500 mt-1">{deleteError}</p>}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors">إلغاء</button>
+                <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold transition-colors">إلغاء</button>
                 <button onClick={confirmDelete} className="flex-1 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-bold shadow-lg shadow-red-200 transition-colors">حذف نهائي</button>
               </div>
             </div>
