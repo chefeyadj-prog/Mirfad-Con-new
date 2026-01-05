@@ -18,7 +18,8 @@ import {
   Database,
   LockKeyhole,
   UserCog,
-  Calendar
+  Calendar,
+  Target
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionsContext';
@@ -44,6 +45,7 @@ const Sidebar = () => {
     { to: '/general-expenses', icon: PieChart, label: 'المصاريف العامة', pKey: 'general_expenses' },
     { to: '/suppliers', icon: Users, label: 'الموردين', pKey: 'suppliers' },
     { to: '/salaries', icon: UserCog, label: 'الموارد البشرية والرواتب', pKey: 'salaries' },
+    { to: '/targets', icon: Target, label: 'الأهداف والعمولات', pKey: 'targets' },
     { to: '/retroactive', icon: History, label: 'الأثر الرجعي', pKey: 'retroactive' },
     { to: '/reports', icon: FileText, label: 'التقارير الذكية', pKey: 'reports' },
     { to: '/backups', icon: Database, label: 'النسخ الاحتياطية', pKey: 'backups' },
