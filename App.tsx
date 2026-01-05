@@ -23,6 +23,7 @@ import AuditLogs from './views/AuditLogs';
 import Retroactive from './views/Retroactive';
 import PermissionsManagement from './views/PermissionsManagement';
 import MonthlyPurchasesReport from './views/MonthlyPurchasesReport';
+import TargetCommission from './views/TargetCommission';
 import { useAuth } from './context/AuthContext';
 import { usePermissions } from './context/PermissionsContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -169,6 +170,7 @@ const App: React.FC = () => {
               <Route path="/suppliers" element={<ProtectedRoute permissionKey="suppliers"><Suppliers /></ProtectedRoute>} />
               <Route path="/suppliers/:id" element={<ProtectedRoute permissionKey="suppliers"><SupplierStatement /></ProtectedRoute>} />
               <Route path="/salaries" element={<ProtectedRoute permissionKey="salaries"><Salaries /></ProtectedRoute>} />
+              <Route path="/targets" element={<ProtectedRoute permissionKey="targets"><TargetCommission /></ProtectedRoute>} />
               <Route path="/retroactive" element={<ProtectedRoute permissionKey="retroactive"><Retroactive /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute permissionKey="reports"><Reports /></ProtectedRoute>} />
               <Route path="/backups" element={<ProtectedRoute permissionKey="backups"><Backups /></ProtectedRoute>} />
