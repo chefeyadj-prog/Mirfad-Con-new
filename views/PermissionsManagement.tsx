@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
     LockKeyhole, UserCog, ShieldCheck, ShieldAlert, CheckCircle2, 
@@ -81,7 +80,20 @@ const PERMISSIONS_SCHEMA: Record<string, { label: string, icon: any, features: R
         icon: Users, 
         features: { canAdd: 'إضافة مورد', canDelete: 'حذف', canEdit: 'تعديل', canPay: 'دفع مستحقات' } 
     },
-    salaries: { label: 'الموارد البشرية والرواتب', icon: UserCog, features: { canView: 'دخول الصفحة' } },
+    salaries: { 
+        label: 'الموارد البشرية والرواتب', 
+        icon: UserCog, 
+        features: { 
+            showOverview: 'إظهار نظرة عامة', 
+            showEmployees: 'إظهار الموظفين', 
+            showPayroll: 'إظهار مسيرة الرواتب', 
+            showLoans: 'إظهار السلف', 
+            showDeductions: 'إظهار الخصومات', 
+            showMeals: 'إظهار الوجبات', 
+            showShortages: 'إظهار العجوزات', 
+            showBonuses: 'إظهار المكافآت' 
+        } 
+    },
     targets: { label: 'الأهداف والعمولات', icon: Target, features: { canEdit: 'تعديل الأهداف', canView: 'عرض العمولات' } },
     retroactive: { label: 'الأثر الرجعي', icon: History, features: { canView: 'دخول الصفحة' } },
     reports: { label: 'التقرير الذكي', icon: FileText, features: { canView: 'دخول الصفحة' } },
@@ -234,6 +246,32 @@ const PermissionsManagement: React.FC = () => {
         } catch (err) {} finally { setIsLoading(false); }
     };
 
+    const handleAddRole = async () => {
+        if (!newRoleName.trim()) return;
+        setIsLoading(true);
+        try {
+            // إضافة رتبة جديدة للصلاحيات ببيانات افتراضية
+            const initialPerms: Record<string, PagePermissions> = {};
+            Object.keys(PERMISSIONS_SCHEMA).forEach(key => {
+                const features: Record<string, boolean> = {};
+                Object.keys(PERMISSIONS_SCHEMA[key].features).forEach(f => { features[f] = true; });
+                initialPerms[key] = { show: true, features };
+            });
+
+            await supabase.from('role_permissions').insert({
+                role: newRoleName.trim().toLowerCase(),
+                permissions: initialPerms
+            });
+            
+            await logAction(currentUser, 'create', 'الرتب', `إضافة رتبة جديدة: ${newRoleName}`);
+            setIsAddRoleModalOpen(false);
+            setNewRoleName('');
+            fetchData();
+            setMessage({ text: 'تمت إضافة الرتبة بنجاح', type: 'success' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (err) {} finally { setIsLoading(false); }
+    };
+
     return (
         <div className="max-w-7xl mx-auto pb-20 animate-fade-in text-right" dir="rtl">
             {/* Header */}
@@ -298,8 +336,9 @@ const PermissionsManagement: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="p-5">
-                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black border ${(roles as any)[u.role]?.color || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                {(roles as any)[u.role]?.label || u.role}
+                                            {/* Fix: cast roles to Record<string, any> to avoid Property access errors */}
+                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black border ${(roles as Record<string, any>)[u.role]?.color || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                {(roles as Record<string, any>)[u.role]?.label || u.role}
                                             </span>
                                         </td>
                                         <td className="p-5">
@@ -348,11 +387,13 @@ const PermissionsManagement: React.FC = () => {
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden animate-scale-in border border-white/20">
                         <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-4">
-                                <div className={`p-4 rounded-2xl ${(roles as any)[selectedRoleForPerms]?.color || 'bg-slate-100'}`}>
+                                {/* Fix: Explicitly cast roles to access color property */}
+                                <div className={`p-4 rounded-2xl ${(roles as Record<string, any>)[selectedRoleForPerms]?.color || 'bg-slate-100'}`}>
                                     <Settings2 size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-slate-800 text-xl">حوكمة رتبة: {(roles as any)[selectedRoleForPerms]?.label}</h3>
+                                    {/* Fix: Explicitly cast roles to access label property */}
+                                    <h3 className="font-black text-slate-800 text-xl">حوكمة رتبة: {(roles as Record<string, any>)[selectedRoleForPerms]?.label}</h3>
                                     <p className="text-xs text-slate-400 font-bold mt-0.5">تحكم دقيق في ظهور الصفحات والوظائف الفرعية</p>
                                 </div>
                             </div>
@@ -425,8 +466,8 @@ const PermissionsManagement: React.FC = () => {
                         </div>
 
                         <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
-                            <button onClick={() => setIsRoleModalOpen(false)} className="px-8 py-3 text-slate-500 font-black hover:bg-slate-50 rounded-2xl transition-all">إلغاء</button>
-                            <button onClick={handleSaveRolePermissions} disabled={isLoading} className="px-12 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50">
+                            <button onClick={() => setIsRoleModalOpen(false)} className="px-8 py-3 text-slate-500 font-black hover:bg-slate-100 rounded-2xl transition-all">إلغاء</button>
+                            <button onClick={handleSaveRolePermissions} disabled={isLoading} className="px-12 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50">
                                 {isLoading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={20} />} 
                                 اعتماد وحفظ الصلاحيات
                             </button>
@@ -434,7 +475,108 @@ const PermissionsManagement: React.FC = () => {
                     </div>
                 </div>
             )}
-            {/* ... other modals (Add User, Change Pwd, etc) remain same ... */}
+
+            {/* Modal: Add User */}
+            {isAddUserModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-black text-slate-800">إضافة مستخدم جديد</h3>
+                            <button onClick={() => setIsAddUserModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div><label className="block text-xs font-black text-slate-500 mb-1.5">الاسم الكامل</label><input type="text" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} /></div>
+                            <div><label className="block text-xs font-black text-slate-500 mb-1.5">البريد الإلكتروني</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} /></div>
+                            <div><label className="block text-xs font-black text-slate-500 mb-1.5">كلمة المرور</label><input type="text" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
+                            <div><label className="block text-xs font-black text-slate-500 mb-1.5">الرتبة</label>
+                                <select className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                                    {/* Fix: cast Object.entries(roles) to any to handle dynamic role value property access */}
+                                    {(Object.entries(roles) as [string, any][]).map(([key, details]) => <option key={key} value={key}>{details.label}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                            <button onClick={() => setIsAddUserModalOpen(false)} className="px-6 py-2.5 text-slate-500 font-bold">إلغاء</button>
+                            <button onClick={handleAddUser} className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 shadow-md">حفظ المستخدم</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Add Role */}
+            {isAddRoleModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in">
+                        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-black text-slate-800">تعريف رتبة جديدة</h3>
+                            <button onClick={() => setIsAddRoleModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-xs font-black text-slate-500 mb-2">اسم الرتبة (باللغة الإنجليزية غالباً لسهولة الربط)</label>
+                            <input type="text" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center font-bold" placeholder="مثلاً: supervisor" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} />
+                            <button onClick={handleAddRole} className="w-full mt-6 py-3 bg-slate-800 text-white rounded-xl font-black hover:bg-slate-900 shadow-lg">إنشاء الرتبة</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Change Password */}
+            {isChangePasswordModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in">
+                        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center text-right">
+                            <h3 className="font-black text-slate-800">تغيير كلمة مرور: {passwordData.userName}</h3>
+                            <button onClick={() => setIsChangePasswordModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-xs font-black text-slate-500 mb-2">كلمة المرور الجديدة</label>
+                            <input type="text" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center font-bold" value={passwordData.newPassword} onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})} />
+                            <button onClick={handleUpdatePassword} className="w-full mt-6 py-3 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 shadow-lg">تحديث كلمة المرور</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Change Role */}
+            {isChangeRoleModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in">
+                        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-black text-slate-800">تعديل رتبة: {roleUpdateData.userName}</h3>
+                            <button onClick={() => setIsChangeRoleModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20} /></button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-xs font-black text-slate-500 mb-2">اختر الرتبة الجديدة</label>
+                            <select className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={roleUpdateData.newRole} onChange={e => setRoleUpdateData({...roleUpdateData, newRole: e.target.value})}>
+                                {/* Fix: cast Object.entries(roles) to any to handle dynamic role value property access */}
+                                {(Object.entries(roles) as [string, any][]).map(([key, details]) => <option key={key} value={key}>{details.label}</option>)}
+                            </select>
+                            <button onClick={handleUpdateRole} className="w-full mt-6 py-3 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 shadow-lg">حفظ الرتبة الجديدة</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Delete User */}
+            {isDeleteUserModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-sm overflow-hidden animate-scale-in border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-sm"><AlertTriangle size={32} /></div>
+                            <h3 className="text-xl font-black text-slate-800 mb-2">حذف المستخدم نهائياً؟</h3>
+                            <p className="text-sm text-slate-500 mb-6 font-bold leading-relaxed px-4">أنت على وشك حذف حساب الموظف <span className="text-red-600">{deleteUserData.userName}</span>. يرجى تأكيد العملية عبر إدخال رمز التحقق (1234).</p>
+                            
+                            <input type="password" className="w-full p-3 border border-slate-200 rounded-xl text-center font-mono text-xl focus:ring-4 focus:ring-red-50 outline-none transition-all mb-4" placeholder="رمز التحقق" value={deleteUserData.confirmPassword} onChange={e => setDeleteUserData({...deleteUserData, confirmPassword: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleDeleteUser()} />
+                            {modalError && <p className="text-xs text-red-500 font-bold mb-4">{modalError}</p>}
+                            
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsDeleteUserModalOpen(false)} className="flex-1 py-3 bg-slate-50 text-slate-500 font-bold rounded-xl transition-all">إلغاء</button>
+                                <button onClick={handleDeleteUser} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black shadow-lg shadow-red-100 hover:bg-red-700 transition-all">تأكيد الحذف</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
