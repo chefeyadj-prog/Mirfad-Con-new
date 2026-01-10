@@ -6,6 +6,7 @@ import { supabase } from '../services/supabaseClient';
 import StatCard from '../components/StatCard';
 import { logAction } from '../services/auditLogService';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
 import { round } from '../utils/mathUtils';
 
 type TabType = 'overview' | 'payroll' | 'employees' | 'loans' | 'deductions' | 'meals' | 'shortages' | 'bonuses';
@@ -16,6 +17,7 @@ const currentYear = new Date().getFullYear();
 
 const Salaries: React.FC = () => {
   const { user } = useAuth();
+  const { hasFeature } = usePermissions();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [transactions, setTransactions] = useState<SalaryTransaction[]>([]);
@@ -28,6 +30,29 @@ const Salaries: React.FC = () => {
   const [extraDays, setExtraDays] = useState<Record<string, number>>({});
   const [extraHours, setExtraHours] = useState<Record<string, number>>({});
   const [annualLeaveDays, setAnnualLeaveDays] = useState<Record<string, number>>({});
+
+  // تعريف التبويبات مع مفاتيح الصلاحيات
+  const allTabs = useMemo(() => [
+    { id: 'overview', label: 'نظرة عامة', icon: PieChart, fKey: 'showOverview' },
+    { id: 'employees', label: 'الموظفين', icon: Users, fKey: 'showEmployees' },
+    { id: 'payroll', label: 'مسير الرواتب', icon: Banknote, fKey: 'showPayroll' },
+    { id: 'loans', label: 'السلف', icon: Wallet, fKey: 'showLoans' },
+    { id: 'deductions', label: 'الخصومات', icon: AlertCircle, fKey: 'showDeductions' },
+    { id: 'meals', label: 'الوجبات', icon: Utensils, fKey: 'showMeals' },
+    { id: 'shortages', label: 'العجوزات', icon: AlertTriangle, fKey: 'showShortages' },
+    { id: 'bonuses', label: 'المكافآت', icon: Gift, fKey: 'showBonuses' }
+  ], []);
+
+  const availableTabs = useMemo(() => 
+    allTabs.filter(tab => hasFeature('salaries', tab.fKey)), 
+  [allTabs, hasFeature]);
+
+  // تعيين أول تبويب متاح عند التحميل
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.some(t => t.id === activeTab)) {
+        setActiveTab(availableTabs[0].id as TabType);
+    }
+  }, [availableTabs, activeTab]);
 
   const fetchData = async (isInitial = false) => {
     if (isInitial) setIsLoading(true);
@@ -390,23 +415,14 @@ const Salaries: React.FC = () => {
 
       <div className="mb-6">
          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-1 overflow-x-auto custom-scrollbar">
-             {[ 
-                 { id: 'overview', label: 'نظرة عامة', icon: PieChart },
-                 { id: 'employees', label: 'الموظفين', icon: Users }, 
-                 { id: 'payroll', label: 'مسير الرواتب', icon: Banknote }, 
-                 { id: 'loans', label: 'السلف', icon: Wallet }, 
-                 { id: 'deductions', label: 'الخصومات', icon: AlertCircle }, 
-                 { id: 'meals', label: 'الوجبات', icon: Utensils }, 
-                 { id: 'shortages', label: 'العجوزات', icon: AlertTriangle }, 
-                 { id: 'bonuses', label: 'المكافآت', icon: Gift } 
-             ].map((tab) => (
+             {availableTabs.map((tab) => (
                  <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)} className={`px-5 py-2.5 rounded-t-xl flex items-center gap-2 transition-all font-bold text-sm whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-indigo-600 border-x border-t border-slate-200 shadow-sm relative top-px' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}><tab.icon size={18} /><span>{tab.label}</span></button>
              ))}
          </div>
       </div>
 
       <div className="mt-4">
-          {activeTab === 'overview' && (
+          {activeTab === 'overview' && hasFeature('salaries', 'showOverview') && (
               <div className="space-y-8 animate-fade-in">
                  {/* البطاقات الرئيسية */}
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -476,7 +492,7 @@ const Salaries: React.FC = () => {
               </div>
           )}
 
-          {activeTab === 'payroll' && (
+          {activeTab === 'payroll' && hasFeature('salaries', 'showPayroll') && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
                 <div className="overflow-x-auto">
                     <table className="w-full text-right min-w-[1500px]">
@@ -584,7 +600,7 @@ const Salaries: React.FC = () => {
               </div>
           )}
 
-          {activeTab === 'employees' && (
+          {activeTab === 'employees' && hasFeature('salaries', 'showEmployees') && (
               <div className="space-y-6 animate-fade-in text-right">
                  <div className="flex justify-between items-center">
                     <h3 className="font-bold text-slate-700">قائمة الموظفين ({employees.length})</h3>
@@ -634,11 +650,11 @@ const Salaries: React.FC = () => {
                  </div>
               </div>
           )}
-          {activeTab === 'loans' && renderTransactionForm('loan', 'سلفة / قرض', Wallet, 'text-orange-600')}
-          {activeTab === 'deductions' && renderTransactionForm('deduction', 'خصم إداري', AlertCircle, 'text-red-600')}
-          {activeTab === 'meals' && renderTransactionForm('meal', 'وجبة', Utensils, 'text-blue-600')}
-          {activeTab === 'shortages' && renderTransactionForm('shortage', 'عجز صندوق', AlertTriangle, 'text-purple-600')}
-          {activeTab === 'bonuses' && renderTransactionForm('bonus', 'مكافأة / حافز', Gift, 'text-green-600')}
+          {activeTab === 'loans' && hasFeature('salaries', 'showLoans') && renderTransactionForm('loan', 'سلفة / قرض', Wallet, 'text-orange-600')}
+          {activeTab === 'deductions' && hasFeature('salaries', 'showDeductions') && renderTransactionForm('deduction', 'خصم إداري', AlertCircle, 'text-red-600')}
+          {activeTab === 'meals' && hasFeature('salaries', 'showMeals') && renderTransactionForm('meal', 'وجبة', Utensils, 'text-blue-600')}
+          {activeTab === 'shortages' && hasFeature('salaries', 'showShortages') && renderTransactionForm('shortage', 'عجز صندوق', AlertTriangle, 'text-purple-600')}
+          {activeTab === 'bonuses' && hasFeature('salaries', 'showBonuses') && renderTransactionForm('bonus', 'مكافأة / حافز', Gift, 'text-green-600')}
       </div>
 
       {showEmpModal && (
