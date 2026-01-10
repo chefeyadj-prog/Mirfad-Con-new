@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Target, TrendingUp, Users, Plus, Save, Loader2, Calendar, CheckCircle2, AlertCircle, Info, Calculator, Banknote, User, Hash, Trophy, PlusCircle, X, UserPlus, Search, UserCheck, UserMinus, TableProperties, LayoutGrid } from 'lucide-react';
+import { Target, TrendingUp, Users, Plus, Save, Loader2, Calendar, CheckCircle2, AlertCircle, Info, Calculator, Banknote, User, Hash, Trophy, PlusCircle, X, UserPlus, Search, UserCheck, UserMinus, TableProperties, LayoutGrid, Edit2, Lock } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { Employee } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,18 @@ const TargetCommission: React.FC = () => {
     const [participantSearch, setParticipantSearch] = useState('');
     const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
 
+    // Security states
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [authPassword, setAuthPassword] = useState('');
+    const [authError, setAuthError] = useState('');
+    const [authAction, setAuthAction] = useState<'add' | 'edit'>('add');
+    const [pendingEmpForEdit, setPendingEmpForEdit] = useState<Employee | null>(null);
+
+    // Manual Edit states
+    const [isManualEditModalOpen, setIsManualEditModalOpen] = useState(false);
+    const [selectedEmpForEdit, setSelectedEmpForEdit] = useState<Employee | null>(null);
+    const [manualEditValue, setManualEditValue] = useState('');
+
     const [year, month] = selectedMonth.split('-');
     const currentMonthNum = Number(month);
     const currentYearNum = Number(year);
@@ -37,24 +49,17 @@ const TargetCommission: React.FC = () => {
     const fetchData = async (silent = false) => {
         if (!silent) setIsLoading(true);
         try {
-            // 1. Fetch All Employees
             const { data: empData, error: empError } = await supabase.from('employees').select('*').order('name');
             if (empError) throw empError;
             if (empData) setEmployees(empData);
 
-            // 2. Fetch Commissions Summary for the selected month/year
             const { data: commData, error: commError } = await supabase
                 .from('employee_commissions')
                 .select('*')
                 .eq('month', currentMonthNum)
                 .eq('year', currentYearNum);
 
-            if (commError) {
-                if (commError.code === '42P01') {
-                    setMessage({ text: 'خطأ: جدول العمولات غير موجود في قاعدة البيانات. يرجى مراجعة التعليمات.', type: 'error' });
-                }
-                throw commError;
-            }
+            if (commError) throw commError;
 
             const commMap: Record<string, EmployeeCommission> = {};
             const activeIds: string[] = [];
@@ -82,7 +87,6 @@ const TargetCommission: React.FC = () => {
         fetchData();
     }, [selectedMonth]);
 
-    // Derived state: employees who have a record in the commissions table for this month
     const eligibleEmployees = useMemo(() => {
         return employees.filter(emp => commissions[emp.id] !== undefined);
     }, [employees, commissions]);
@@ -92,17 +96,71 @@ const TargetCommission: React.FC = () => {
         return commArray.reduce((sum, c) => sum + (Number(c.total_count) || 0), 0);
     }, [commissions]);
 
-    const handleOpenAddModal = () => {
-        if (eligibleEmployees.length === 0) {
-            alert("يرجى تحديد الموظفين المشاركين أولاً عبر زر إدارة المشاركين.");
-            return;
+    // Unified Security Entry
+    const handleOpenAddWithSecurity = () => {
+        setAuthAction('add');
+        setAuthPassword('');
+        setAuthError('');
+        setIsAuthModalOpen(true);
+    };
+
+    const handleOpenEditWithSecurity = (emp: Employee) => {
+        setAuthAction('edit');
+        setPendingEmpForEdit(emp);
+        setAuthPassword('');
+        setAuthError('');
+        setIsAuthModalOpen(true);
+    };
+
+    const verifySecurity = () => {
+        if (authPassword === '4848') {
+            setIsAuthModalOpen(false);
+            if (authAction === 'add') {
+                if (eligibleEmployees.length === 0) {
+                    alert("يرجى تحديد الموظفين المشاركين أولاً عبر زر إدارة المشاركين.");
+                    return;
+                }
+                const initial: Record<string, string> = {};
+                eligibleEmployees.forEach(emp => { initial[emp.id] = ''; });
+                setEntryValues(initial);
+                setIsAddModalOpen(true);
+            } else if (authAction === 'edit' && pendingEmpForEdit) {
+                setSelectedEmpForEdit(pendingEmpForEdit);
+                setManualEditValue(String(commissions[pendingEmpForEdit.id]?.total_count || 0));
+                setIsManualEditModalOpen(true);
+            }
+        } else {
+            setAuthError('كلمة المرور غير صحيحة');
         }
-        const initial: Record<string, string> = {};
-        eligibleEmployees.forEach(emp => {
-            initial[emp.id] = '';
-        });
-        setEntryValues(initial);
-        setIsAddModalOpen(true);
+    };
+
+    const handleSaveManualEdit = async () => {
+        if (!selectedEmpForEdit) return;
+        setIsSaving(true);
+        try {
+            const newValue = Number(manualEditValue) || 0;
+            const oldValue = commissions[selectedEmpForEdit.id]?.total_count || 0;
+
+            const { error } = await supabase.from('employee_commissions').upsert({
+                employee_id: selectedEmpForEdit.id,
+                month: currentMonthNum,
+                year: currentYearNum,
+                total_count: newValue,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'employee_id,month,year' });
+
+            if (!error) {
+                await logAction(user, 'update', 'العمولات', `تعديل يدوي: الموظف ${selectedEmpForEdit.name} من (${oldValue}) إلى (${newValue})`);
+                setMessage({ text: 'تم تحديث الإجمالي بنجاح', type: 'success' });
+                await fetchData(true);
+                setIsManualEditModalOpen(false);
+            }
+        } catch (err) {
+            setMessage({ text: 'خطأ في تحديث البيانات', type: 'error' });
+        } finally {
+            setIsSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
     };
 
     const handleSaveBatchEntries = async () => {
@@ -114,6 +172,8 @@ const TargetCommission: React.FC = () => {
         setIsSaving(true);
         try {
             const updates = [];
+            const logDetails: string[] = [];
+
             for (const emp of eligibleEmployees) {
                 const addValue = Number(entryValues[emp.id]) || 0;
                 if (addValue !== 0) {
@@ -129,12 +189,13 @@ const TargetCommission: React.FC = () => {
                             updated_at: new Date().toISOString()
                         }, { onConflict: 'employee_id,month,year' })
                     );
+                    logDetails.push(`${emp.name} (+${addValue})`);
                 }
             }
 
             if (updates.length > 0) {
                 await Promise.all(updates);
-                await logAction(user, 'update', 'العمولات', `إضافة أعداد جديدة لـ ${updates.length} موظف لشهر ${selectedMonth}`);
+                await logAction(user, 'update', 'العمولات', `إضافة جماعية للعمولات: ${logDetails.join(' | ')}`);
                 setMessage({ text: 'تم تحديث الأعداد بنجاح', type: 'success' });
                 await fetchData(true);
             }
@@ -181,13 +242,10 @@ const TargetCommission: React.FC = () => {
                 await logAction(user, 'update', 'العمولات', `تحديث قائمة المشاركين لشهر ${selectedMonth}`);
                 await fetchData(true);
                 setMessage({ text: 'تم تحديث قائمة المشاركين بنجاح', type: 'success' });
-            } else {
-                 setIsSelectParticipantsModalOpen(false);
             }
             setIsSelectParticipantsModalOpen(false);
         } catch (err: any) {
-            console.error("Save participants error:", err);
-            setMessage({ text: 'حدث خطأ أثناء تحديث قائمة المشاركين. تأكد من وجود الجدول في قاعدة البيانات.', type: 'error' });
+            setMessage({ text: 'حدث خطأ أثناء تحديث قائمة المشاركين', type: 'error' });
         } finally {
             setIsSaving(false);
             setTimeout(() => setMessage(null), 3000);
@@ -236,7 +294,7 @@ const TargetCommission: React.FC = () => {
                         إدارة المشاركين
                     </button>
                     <button 
-                        onClick={handleOpenAddModal}
+                        onClick={handleOpenAddWithSecurity}
                         className="bg-indigo-600 text-white px-6 py-2.5 rounded-2xl font-black flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all text-sm"
                     >
                         <PlusCircle size={18} />
@@ -261,7 +319,7 @@ const TargetCommission: React.FC = () => {
                 <StatCard title="تاريخ التحديث" value={new Date().toLocaleDateString('ar-SA')} icon={Calendar} color="orange" trend="توقيت النظام" />
             </div>
 
-            {/* Main Grid View - Smaller Cards */}
+            {/* Main Grid View */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {isLoading ? (
                     <div className="col-span-full py-20 text-center"><Loader2 className="animate-spin inline-block text-indigo-600" size={48} /></div>
@@ -284,6 +342,16 @@ const TargetCommission: React.FC = () => {
                     return (
                         <div key={emp.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50/40 rounded-bl-full -mr-6 -mt-6 transition-transform group-hover:scale-110"></div>
+                            
+                            {/* Edit Button with Security */}
+                            <button 
+                                onClick={() => handleOpenEditWithSecurity(emp)}
+                                className="absolute top-2 left-2 p-1.5 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all z-10"
+                                title="تعديل الإجمالي"
+                            >
+                                <Edit2 size={12} />
+                            </button>
+
                             <div className="flex items-center gap-3 relative mb-3">
                                 <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-base shadow-md shadow-indigo-100 shrink-0">
                                     {emp.name.charAt(0)}
@@ -308,6 +376,153 @@ const TargetCommission: React.FC = () => {
                     );
                 })}
             </div>
+
+            {/* Manual Edit Modal */}
+            {isManualEditModalOpen && selectedEmpForEdit && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in border border-slate-200">
+                        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-black text-slate-800">تعديل إجمالي العمولات</h3>
+                            <button onClick={() => setIsManualEditModalOpen(false)} className="text-slate-400 hover:text-red-500"><X size={20} /></button>
+                        </div>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 font-black text-2xl shadow-sm">
+                                {selectedEmpForEdit.name.charAt(0)}
+                            </div>
+                            <h4 className="font-black text-slate-800 mb-1">{selectedEmpForEdit.name}</h4>
+                            <p className="text-xs text-slate-400 font-bold mb-6">قم بتعديل الرقم الإجمالي المحقق لهذا الشهر</p>
+                            
+                            <div className="space-y-4">
+                                <div className="relative">
+                                    <input 
+                                        type="number"
+                                        className="w-full p-4 border-2 border-slate-100 rounded-2xl text-center font-mono font-black text-2xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all"
+                                        value={manualEditValue}
+                                        onChange={(e) => setManualEditValue(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setIsManualEditModalOpen(false)} className="flex-1 py-3 bg-slate-50 text-slate-500 rounded-xl font-black hover:bg-slate-100 transition-all">إلغاء</button>
+                                    <button 
+                                        onClick={handleSaveManualEdit}
+                                        disabled={isSaving}
+                                        className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                        تحديث الإجمالي
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Security Pass Modal */}
+            {isAuthModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden animate-scale-in border border-slate-200">
+                        <div className="p-6 text-center">
+                            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-amber-100 shadow-sm">
+                                <Lock size={28} />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-800 mb-2">كلمة مرور التحقق</h3>
+                            <p className="text-[10px] text-slate-400 font-bold mb-6 px-4">أدخل الرمز السري للمتابعة (4848)</p>
+                            
+                            <input 
+                                type="password" 
+                                className={`w-full p-4 border-2 rounded-2xl text-center font-mono text-xl outline-none mb-2 focus:ring-4 ${authError ? 'border-red-500 ring-red-50' : 'border-slate-100 focus:border-indigo-500 ring-indigo-50'}`}
+                                placeholder="****"
+                                value={authPassword}
+                                onChange={(e) => setAuthPassword(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && verifySecurity()}
+                                autoFocus
+                            />
+                            {authError && <p className="text-[10px] text-red-500 font-bold mb-4">{authError}</p>}
+                            
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsAuthModalOpen(false)} className="flex-1 py-2.5 text-slate-400 font-black text-xs hover:bg-slate-50 rounded-xl transition-all">إلغاء</button>
+                                <button onClick={verifySecurity} className="flex-[2] py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-all">تحقق ومتابعة</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Batch Add Modal */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-7xl overflow-hidden animate-scale-in border border-slate-200 flex flex-col max-h-[90vh]">
+                        <div className="p-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-indigo-600 text-white rounded-xl">
+                                    <LayoutGrid size={20} />
+                                </div>
+                                <div className="text-right">
+                                    <h3 className="font-black text-slate-800 text-lg">تحديث أعداد العمولات</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase">إدخال البيانات السريع لمجموع الموظفين</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors p-2"><X size={24} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/20">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {eligibleEmployees.map((emp) => (
+                                    <div key={emp.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3 relative group hover:shadow-md transition-all">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-[11px] shadow-sm shrink-0">
+                                                    {emp.name.charAt(0)}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h3 className="font-black text-slate-800 text-[11px] truncate" title={emp.name}>{emp.name}</h3>
+                                                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{emp.role}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-left bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100 shrink-0">
+                                                <span className="text-[8px] font-black text-slate-400 block uppercase">الحالي</span>
+                                                <span className="font-mono font-black text-slate-700 text-[10px]">{(commissions[emp.id]?.total_count || 0).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="relative">
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none">
+                                                <Plus size={14} />
+                                            </div>
+                                            <input 
+                                                type="number" 
+                                                value={entryValues[emp.id]}
+                                                onChange={(e) => setEntryValues({...entryValues, [emp.id]: e.target.value})}
+                                                className="w-full p-2.5 pr-8 text-center font-mono font-black text-indigo-600 text-lg bg-slate-50/50 border-2 border-slate-100 rounded-xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-slate-100"
+                                                placeholder="0"
+                                            />
+                                            {Number(entryValues[emp.id]) > 0 && (
+                                                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-green-500 font-black text-[9px] bg-green-50 px-1.5 py-0.5 rounded border border-green-100 animate-fade-in pointer-events-none">
+                                                    ➔ {(Number(commissions[emp.id]?.total_count || 0) + Number(entryValues[emp.id])).toLocaleString()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
+                            <button onClick={() => setIsAddModalOpen(false)} className="px-6 py-2.5 text-slate-500 font-black hover:bg-slate-50 rounded-xl transition-all text-xs">إلغاء</button>
+                            <button 
+                                onClick={handleSaveBatchEntries}
+                                disabled={isSaving}
+                                className="px-12 py-2.5 bg-indigo-600 text-white rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50 text-xs"
+                            >
+                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                اعتماد وحفظ البيانات
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Selection Modal */}
             {isSelectParticipantsModalOpen && (
@@ -378,80 +593,6 @@ const TargetCommission: React.FC = () => {
                             >
                                 {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                                 حفظ التغييرات
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Commission Modal (Ultra Compact & Wider) */}
-            {isAddModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-7xl overflow-hidden animate-scale-in border border-slate-200 flex flex-col max-h-[90vh]">
-                        <div className="p-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-indigo-600 text-white rounded-xl">
-                                    <LayoutGrid size={20} />
-                                </div>
-                                <div className="text-right">
-                                    <h3 className="font-black text-slate-800 text-lg">تحديث أعداد العمولات</h3>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">إدخال البيانات السريع لمجموع الموظفين</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors p-2"><X size={24} /></button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/20">
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3">
-                                {eligibleEmployees.map((emp) => (
-                                    <div key={emp.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3 relative group hover:shadow-md transition-all">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-[11px] shadow-sm shrink-0">
-                                                    {emp.name.charAt(0)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <h3 className="font-black text-slate-800 text-[11px] truncate" title={emp.name}>{emp.name}</h3>
-                                                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{emp.role}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-left bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100 shrink-0">
-                                                <span className="text-[8px] font-black text-slate-400 block uppercase">الحالي</span>
-                                                <span className="font-mono font-black text-slate-700 text-[10px]">{(commissions[emp.id]?.total_count || 0).toLocaleString()}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="relative">
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none">
-                                                <Plus size={14} />
-                                            </div>
-                                            <input 
-                                                type="number" 
-                                                value={entryValues[emp.id]}
-                                                onChange={(e) => setEntryValues({...entryValues, [emp.id]: e.target.value})}
-                                                className="w-full p-2.5 pr-8 text-center font-mono font-black text-indigo-600 text-lg bg-slate-50/50 border-2 border-slate-100 rounded-xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-slate-100"
-                                                placeholder="0"
-                                            />
-                                            {Number(entryValues[emp.id]) > 0 && (
-                                                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-green-500 font-black text-[9px] bg-green-50 px-1.5 py-0.5 rounded border border-green-100 animate-fade-in pointer-events-none">
-                                                    ➔ {(Number(commissions[emp.id]?.total_count || 0) + Number(entryValues[emp.id])).toLocaleString()}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
-                            <button onClick={() => setIsAddModalOpen(false)} className="px-6 py-2.5 text-slate-500 font-black hover:bg-slate-50 rounded-xl transition-all text-xs">إلغاء</button>
-                            <button 
-                                onClick={handleSaveBatchEntries}
-                                disabled={isSaving}
-                                className="px-12 py-2.5 bg-indigo-600 text-white rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50 text-xs"
-                            >
-                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                اعتماد وحفظ البيانات
                             </button>
                         </div>
                     </div>
