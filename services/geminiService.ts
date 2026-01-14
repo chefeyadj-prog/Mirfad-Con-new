@@ -2,12 +2,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 const getClient = () => {
-  // Check if API key is available
-  if (!process.env.API_KEY) {
-    console.warn("Gemini API Key is missing.");
+  // Vite exposes only variables that start with VITE_
+  const key = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
+  if (!key) {
+    console.warn("Gemini API Key is missing. Set VITE_GEMINI_API_KEY in .env / Vercel.");
     return null;
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  return new GoogleGenAI({ apiKey: key });
 };
 
 export const generateReportAnalysis = async (dataContext: string): Promise<string> => {
